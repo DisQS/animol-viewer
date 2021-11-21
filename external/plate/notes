@@ -1,0 +1,15 @@
+plate is a multi platform api for building applications.
+
+It provides input interfaces and output interfaces.
+
+It is supplied as a header library.
+
+webgl needs emcc eg:
+
+  pushd ~/emsdk
+  . emsdk_env.sh
+  popd
+
+
+
+if shaders are changed or this is the first time building, run ./build-shaders.sh first

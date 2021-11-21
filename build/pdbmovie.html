@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width = device-width, height = device-height, initial-scale = 1.0, maximum-scale = 1.0, maximum-scale = 1.0, user-scalable = no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="pdbmovie">
+    <meta name="color-scheme" content="dark light">
+    <title>pdbmovie</title>
+    <link rel="preload" href="version/1/pdbmovie.js" as="script" crossorigin>
+    <link rel="preload" href="version/1/pdbmovie.wasm" as="fetch" crossorigin>
+    <link rel="preload" href="/font/Roboto-Regular-32-small-msdf.ttf" as="fetch" crossorigin>
+    <link rel="prefetch" href="version/1/decoder_worker.js" as="worker" crossorigin>
+    <link rel="prefetch" href="version/1/decoder_worker.wasm" as="worker" crossorigin>
+    <style>
+      .emscripten { padding-right: 0; margin-left: auto; margin-right: auto; display: block; overscroll-behavior-x: none; overscroll-behavior-y: none }
+      div.emscripten { text-align: center; }
+      canvas.emscripten { border: 0px; top: 0px; left: 0px; margin: 0px; width: 100%; height: 100%; overflow: hidden; display: block; overscroll-behavior: none}
+      body { margin: 0; overscroll-behavior-x: none; overscroll-behavior-y: none; }
+      @media screen and (prefers-color-scheme: dark) { canvas.emscripten { background-color: black; } }
+      @media screen and (prefers-color-scheme: dark) { body { background-color: black; } }
+      @media screen and (prefers-color-scheme: light) { canvas.emscripten { background-color: white; } }
+      @media screen and (prefers-color-scheme: light) { body { background-color: white; } }
+      *:focus { outline: none; }
+    </style>
+  </head>
+  <body>
+    <div id="fullscreendiv" style="position: fixed; width: 100%; height: 100%; border: 0px; top: 0px; left: 0px; margin: 0px;">
+    <canvas id="fullscreen" class="emscripten" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+    </div>
+    <script>
+    function initPlate() {
+      const query = window.location.search;
+      const url = new URLSearchParams(query);
+
+      var protein = url.get('protein')
+      if (protein == null)
+        protein = window.location.href.substring(window.location.href.lastIndexOf('/')+1);
+
+      const cv1 = new Plate.movie("#fullscreen", "/db/", protein);
+    }
+    </script>
+    <script async src="version/1/pdbmovie.js" crossorigin></script>
+  </body>
+</html>
