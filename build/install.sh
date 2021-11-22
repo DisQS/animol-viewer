@@ -35,6 +35,9 @@ brotli -f decoder_worker.wasm -o decoder_worker.wasm.br
 gzip -f -k decoder_worker.wasm
 
 popd
+
+chmod a+xr -R temp-web
+
 rsync -auWe 'ssh' temp-web/* $1:/data/www/html/animol-code/
 
 exit 0
