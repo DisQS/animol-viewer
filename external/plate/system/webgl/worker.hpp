@@ -26,7 +26,7 @@ public:
     for (int i = 0; i < cores; ++i)
     {
       work w;
-      w.handle = emscripten_create_worker("version/1/decoder_worker.js");
+      w.handle = emscripten_create_worker("/animol-code/version/1/decoder_worker.js");//TODO: pass in path?
       w.slot   = i;
 
       decoders_.push_back(w);
@@ -138,6 +138,5 @@ private:
   };
 
   inline static std::vector<work> decoders_;
- 
 
 }; // class worker
