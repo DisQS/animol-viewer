@@ -681,26 +681,26 @@ void add_dest(S* s, std::string canvas)
   
   // event: mouse_position
   
-  //emscripten_set_mousemove_callback(canvas.c_str(), s, 1, f_mouse_position);
-  emscripten_set_mousemove_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, s, 1, f_mouse_position);
+  emscripten_set_mousemove_callback(canvas.c_str(), s, 1, f_mouse_position);
+  //emscripten_set_mousemove_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, s, 1, f_mouse_position);
   
   // event: mouse_over
   
-  //emscripten_set_mouseover_callback(canvas.c_str(), s, 1, f_mouse_position);
-  //emscripten_set_mouseout_callback(canvas.c_str(), s, 1, f_mouse_position);
-  emscripten_set_mouseover_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, s, 1, f_mouse_position);
-  emscripten_set_mouseout_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, s, 1, f_mouse_position);
+  emscripten_set_mouseover_callback(canvas.c_str(), s, 1, f_mouse_position);
+  emscripten_set_mouseout_callback(canvas.c_str(), s, 1, f_mouse_position);
+  //emscripten_set_mouseover_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, s, 1, f_mouse_position);
+  //emscripten_set_mouseout_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, s, 1, f_mouse_position);
   
   // event: mouse_button
   
-  //emscripten_set_mousedown_callback(canvas.c_str(), s, 1, f_mouse_position);
+  emscripten_set_mousedown_callback(canvas.c_str(), s, 1, f_mouse_position);
   //emscripten_set_mouseup_callback(canvas.c_str(), s, 1, f_mouse_position);
-  //emscripten_set_click_callback(canvas.c_str(), s, 1, f_mouse_position);
-  //emscripten_set_dblclick_callback(canvas.c_str(), s, 1, f_mouse_position);
-  emscripten_set_mousedown_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, s, 1, f_mouse_position);
+  emscripten_set_click_callback(canvas.c_str(), s, 1, f_mouse_position);
+  emscripten_set_dblclick_callback(canvas.c_str(), s, 1, f_mouse_position);
+  //emscripten_set_mousedown_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, s, 1, f_mouse_position);
   emscripten_set_mouseup_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, s, 1, f_mouse_position);
-  emscripten_set_click_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, s, 1, f_mouse_position);
-  emscripten_set_dblclick_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, s, 1, f_mouse_position);
+  //emscripten_set_click_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, s, 1, f_mouse_position);
+  //emscripten_set_dblclick_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, s, 1, f_mouse_position);
   
   
   // event: scroll_wheel
