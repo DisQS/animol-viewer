@@ -57,7 +57,7 @@ private:
     // start main widget
 
     auto w = plate::ui_event_destination::make_ui<pdbmovie::widget_main<false>>(s_, b, url, code);
-  };
+  }
 
 
   std::shared_ptr<plate::state> s_;

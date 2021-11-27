@@ -92,7 +92,7 @@ std::uint64_t current_frame_{0};
 
 EM_BOOL generate_frame(double now, void *userData)
 {
-  //auto now = ui_event::now();
+//  log_debug("anim");
 
   for (auto& [ctx, s] : windows_)
   {
@@ -119,48 +119,37 @@ EM_BOOL generate_frame(double now, void *userData)
 
       s->run_post_command_queue();
     }
-
-    //emscripten_request_animation_frame(generate_frame, nullptr);
-
-    return EM_TRUE;
   }
-
-
-  //LOG_DEBUG("frame: %d", current_frame_);
 
   ++current_frame_;
 
   return EM_TRUE;
-};
+}
+
 
 void generate_frame() // old, not used
 {
   auto now = ui_event::now();
 
   generate_frame(now, nullptr);
-};
+}
 
 
 
 const char* quit([[maybe_unused]] int eventType, [[maybe_unused]] const void *reserved, [[maybe_unused]] void *userData)
 {
   return "";
-};
+}
 
 
 std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string font_file, std::function< void (bool)> cb)
 {
   auto s = std::make_shared<plate::state>();
 
-  // get font loading first
-
-  s->font_ = std::make_shared<plate::font>(s);
-
-  s->font_->load_font(font_file, cb);
-
   double w, h;
-  [[maybe_unused]] EMSCRIPTEN_RESULT r = emscripten_get_element_css_size(canvas_name.c_str(), &w, &h);
-  log_debug(FMT_COMPILE("emscripten_get_element_css_size: {}"), r);
+
+  //[[maybe_unused]] EMSCRIPTEN_RESULT r = emscripten_get_element_css_size(canvas_name.c_str(), &w, &h);
+  //log_debug(FMT_COMPILE("emscripten_get_element_css_size: {}"), r);
 
   s->viewport_width_ = (int)w;
   s->viewport_height_ = (int)h;
@@ -217,6 +206,12 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
 //  }
 
   emscripten_webgl_make_context_current(s->ctx_);
+
+  // get font loading first
+
+  s->font_ = std::make_shared<plate::font>(s);
+
+  s->font_->load_font(font_file, cb);
 
   const char ES_VERSION_2_0[] = "OpenGL ES 2.0";
   const char ES_VERSION_3_0[] = "OpenGL ES 3.0";
@@ -281,8 +276,6 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
   std::string add_observer = "Plate_RO.observe(document.querySelector('" + canvas_name + "div'))";
   emscripten_run_script(add_observer.c_str());
 
-  log_debug(FMT_COMPILE("setup: {}"), canvas_name);
-
   auto device_type = static_cast<ui_event::DeviceType>(ui_event::js_get_device_type());
   auto device_touch = static_cast<ui_event::DeviceHasTouch>(ui_event::js_is_touch_device());
 
@@ -290,8 +283,8 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
 
   s->set_font_size(get_font_size() / 20.0);
 
-  log_debug(FMT_COMPILE("device_type: {} device_touch: {} darkmode: {} font_size: {}"),
-          ui_event::DeviceType_string(device_type), ui_event::DeviceHasTouch_string(device_touch),
+  log_debug(FMT_COMPILE("canvas: {} device_type: {} device_touch: {} darkmode: {} font_size: {}"),
+          canvas_name, ui_event::DeviceType_string(device_type), ui_event::DeviceHasTouch_string(device_touch),
           s->is_darkmode(), s->get_font_size());
 
   if (s->is_darkmode())
@@ -302,14 +295,12 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
   js_focus(canvas_name.data() + 1, canvas_name.size() - 1);
 
   return s;
-};
+}
 
 
 
 void arch_resize(plate::state* s, int w, int h)
 {
-  std::string div = s->name_ + "div";
-
   s->viewport_width_ = w;
   s->viewport_height_ = h;
 
@@ -318,15 +309,17 @@ void arch_resize(plate::state* s, int w, int h)
   s->pixel_width_  = s->viewport_width_;
   s->pixel_height_ = s->viewport_height_;
   
-  log_debug(FMT_COMPILE("canvas: {} viewport: {} {} pixels: {} {} ratio: {}"), s->name_, w, h, s->pixel_width_, s->pixel_height_, s->pixel_ratio_);
+  //log_debug(FMT_COMPILE("canvas: {} viewport: {} {} pixels: {} {} ratio: {}"), s->name_, w, h, s->pixel_width_, s->pixel_height_, s->pixel_ratio_);
   
   emscripten_set_canvas_element_size(s->name_.c_str(), s->pixel_width_, s->pixel_height_);
+  js_set_dims((s->pixel_width_ / s->pixel_ratio_), (s->pixel_height_ / s->pixel_ratio_),
+                                                               s->name_.data()+1, s->name_.length()-1);
 
   s->projection_.set(s->pixel_width_, s->pixel_height_);
   glViewport(0, 0, s->pixel_width_, s->pixel_height_);
 
   s->do_reshape();
-};
+}
 
 
 void arch_resize(plate::state* s)
@@ -345,7 +338,7 @@ void arch_resize(plate::state* s)
   s->pixel_width_  = std::floor(s->viewport_width_  * s->pixel_ratio_);
   s->pixel_height_ = std::floor(s->viewport_height_ * s->pixel_ratio_);
   
-  log_debug(FMT_COMPILE("canvas: {} viewport: {} {} pixels: {} {} ratio: {}"), s->name_, w, h, s->pixel_width_, s->pixel_height_, s->pixel_ratio_);
+  //log_debug(FMT_COMPILE("canvas: {} viewport: {} {} pixels: {} {} ratio: {}"), s->name_, w, h, s->pixel_width_, s->pixel_height_, s->pixel_ratio_);
   
   emscripten_set_canvas_element_size(s->name_.c_str(), s->pixel_width_, s->pixel_height_);
 
@@ -357,7 +350,7 @@ void arch_resize(plate::state* s)
   glViewport(0, 0, s->pixel_width_, s->pixel_height_);
 
   s->do_reshape();
-};
+}
 
 
 } // namespace plate

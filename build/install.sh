@@ -38,6 +38,6 @@ popd
 
 chmod a+xr -R temp-web
 
-rsync -auWe 'ssh' temp-web/* $1:/data/www/html/animol-code/
+rsync -auWe 'ssh' temp-web/* $1:/data/www/html/animol-viewer/
 
 exit 0

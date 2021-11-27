@@ -41,12 +41,12 @@ public:
   font(std::shared_ptr<state> s) :
     ui_(s)
   {
-  };
+  }
 
 
   ~font()
   {
-  };
+  }
 
 
   void load_font(std::string font_file_name, std::function< void (bool)> cb)
@@ -75,32 +75,27 @@ public:
           on_load_callback_ = nullptr;
         }
       },
-  
-      [this, self] (unsigned int handle, int number_of_bytes, int total_bytes) // on progress
-      {
-        log_debug(FMT_COMPILE("file: {} received: {} total is: {}"),
-                                              font_file_name_, number_of_bytes, total_bytes);
-      }
+      nullptr
     );
-  };
+  }
 
 
   std::uint32_t get_max_height() const noexcept
   {
     return (static_cast<double>(size_) * (ttf_.get_yMax() - ttf_.get_yMin())) /
                                           static_cast<double>(ttf_.get_units_per_em());
-  };
+  }
 
   std::int32_t get_min_y() const noexcept
   {
     return (static_cast<double>(size_) * ttf_.get_yMin()) /
                                           static_cast<double>(ttf_.get_units_per_em());
-  };
+  }
 
   std::uint32_t get_max_width() const noexcept
   {
     return ttf_.get_xMax() - ttf_.get_xMin();
-  };
+  }
 
 
   struct offset
@@ -210,7 +205,7 @@ public:
     }
   
     return { { 0, y_low }, { pen_x, y_high } };
-  };
+  }
 
 
   // utf8 functions
@@ -233,7 +228,7 @@ public:
     }
   
     return result;
-  };
+  }
 
 
   static int utf8_strlen(const char* c)
@@ -248,7 +243,7 @@ public:
     }
   
     return result;
-  };
+  }
 
 
   static std::uint32_t utf8_to_utf32(const char * c)
@@ -268,13 +263,13 @@ public:
     if ((c[0] & 0xF8) == 0xF8 && c[1] && c[2] && c[3] && c[4]) result = ((c[0] & 0x07) << (6 + 6 + 6 + 6)) | ((c[1] & 0x3F) << (6 + 6 + 6)) | ((c[2] & 0x3F) << (6 + 6)) | ((c[3] & 0x3F) << 6) | (c[4] & 0x3F);
   
     return result;
-  };
+  }
 
 
-  auto get_size()         const noexcept { return size_; };
-  auto get_atlas_type()   const noexcept { return atlas_type_; };
-  auto get_atlas_width()  const noexcept { return atlas_width_; };
-  auto get_atlas_height() const noexcept { return atlas_height_; };
+  auto get_size()         const noexcept { return size_; }
+  auto get_atlas_type()   const noexcept { return atlas_type_; }
+  auto get_atlas_width()  const noexcept { return atlas_width_; }
+  auto get_atlas_height() const noexcept { return atlas_height_; }
 
 
   texture texture_;
@@ -321,7 +316,9 @@ private:
         on_load_callback_ = nullptr;
       }
     });
-  };
+
+    ui_->do_draw();
+  }
 
 
   std::function< void (bool)> on_load_callback_;

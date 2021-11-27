@@ -2,117 +2,119 @@
 
 #include <span>
 #include <vector>
+#include <queue>
+
+/*
+    client interface to call user worker code.
+
+    set_path(path)
+
+      sets the webworker url
+
+    get_num_workers()
+
+      returns the number of workers. The code limits this to a maximum of 6 workers even if the client has more.
+
+    call(fname, data_to_send, cb)
+
+      call the fname function on any available worker, with data_to_send input and issue a callback cb with the results
+
+      if all the workers are busy, the action is automatically queued until one is available.
+*/
+
 
 class worker
 {
 
 public:
 
-  static void start()
+
+  static void set_path(std::string_view path) noexcept
   {
-    if (!decoders_.empty())
+    path_ = path;
+  }
+
+
+  static int get_num_workers() noexcept
+  {
+    if (num_workers_ == 0)
+    {
+      num_workers_ = EM_ASM_INT( { return window.navigator.hardwareConcurrency; }) - 1;
+
+      log_debug(FMT_COMPILE("found: {} cores"), num_workers_ + 1);
+
+      if (num_workers_ < 1)
+        num_workers_ = 1;
+
+      if (num_workers_ > 6)
+        num_workers_ = 6;
+    }
+
+    return num_workers_;
+  }
+
+
+  static void start() noexcept
+  {
+    if (!workers_.empty())
       return;
 
-    auto cores = EM_ASM_INT( { return window.navigator.hardwareConcurrency; }) - 1;
-
-    log_debug(FMT_COMPILE("found: {} cores"), cores + 1);
-
-    if (cores < 1)
-      cores = 1;
-
-    if (cores > 6)
-      cores = 6;
-
-    for (int i = 0; i < cores; ++i)
+    for (int i = 0; i < get_num_workers(); ++i)
     {
       work w;
-      w.handle = emscripten_create_worker("/animol-code/version/1/decoder_worker.js");//TODO: pass in path?
-      w.slot   = i;
+      w.handle = emscripten_create_worker(path_.c_str());
 
-      decoders_.push_back(w);
+      workers_.push_back(w);
     }
   }
 
 
-  static void stop()
+  static void stop() noexcept
   {
     static char a = 'a';
 
-    for (auto& d : decoders_)
+    for (auto& w : workers_)
     {
-      emscripten_call_worker(d.handle, "end_worker", &a, 0, [] (char* d, int s, void* u) -> void
+      emscripten_call_worker(w.handle, "end_worker", &a, 0, [] (char* d, int s, void* u) -> void
       {
         log_debug("shutdown webworker");
 
         auto handle = reinterpret_cast<int>(u);
         emscripten_destroy_worker(handle);
-      }, reinterpret_cast<void*>(d.handle));
+
+      }, reinterpret_cast<void*>(w.handle));
     }
 
-    decoders_.clear();
+    workers_.clear();
   }
 
 
-  static bool call(std::string api, std::string_view to_send, std::function< void (int, std::span<std::byte>)>&& cb)
+  template<class DATA>
+  static bool call(std::string fname, DATA& data_to_send, std::function< void (std::span<char>)>&& cb) noexcept
   {
-    if (decoders_.empty())
+    if (workers_.empty())
       start();
 
-    for (auto& d : decoders_)
+    if (queue_.empty())
     {
-      if (!d.cb) // this decoder is free
+      for (auto& w : workers_)
       {
-        d.cb = std::move(cb);
+        if (!w.cb) // this decoder is free
+        {
+          w.cb = std::move(cb);
 
-        emscripten_call_worker(d.handle, api.c_str(), const_cast<char*>(to_send.data()), to_send.size(), callback, &d);
+          emscripten_call_worker(w.handle, fname.c_str(), data_to_send.data(), data_to_send.size(), callback, &w);
 
-        return true;
+          return true;
+        }
       }
     }
 
-    return false; // no spare workers
-  }
+    std::vector<char> data_to_send_copy(data_to_send.data(), data_to_send.data() + data_to_send.size());
 
+    queue_.emplace(fname, std::move(data_to_send_copy), std::move(cb));
 
-  static bool call_slot(int slot, std::string api, std::string_view to_send, std::function< void (int, std::span<std::byte>)>&& cb)
-  {
-    if (slot < 0 || slot >= decoders_.size())
-      return false;
-
-    auto& d = decoders_[slot];
-
-    if (d.cb)
-      return false; // something already in this slot
-
-    d.cb = std::move(cb);
-
-    emscripten_call_worker(d.handle, api.c_str(), const_cast<char*>(to_send.data()), to_send.size(), callback, &d);
-
-    return true;
-  }
-
-
-  static bool call_all(std::string api, std::string_view to_send, std::function< void (int, std::span<std::byte>)>&& cb)
-  {
-    if (decoders_.empty())
-      start();
-
-    for (auto& d : decoders_)
-    {
-      if (!d.cb) // this decoder is free
-      {
-        d.cb = cb;
-
-        emscripten_call_worker(d.handle, api.c_str(), const_cast<char*>(to_send.data()), to_send.size(), callback, &d);
-      }
-      else
-      {
-        log_error("Not all decoder's were available!");
-        return false;
-      }
-    }
-
-    return true;
+    return false; // request has been queued
   }
 
 
@@ -121,22 +123,68 @@ private:
 
   static void callback(char* d, int s, void* u)
   {
-    auto* work = reinterpret_cast<struct work*>(u);
+    auto work = reinterpret_cast<struct work*>(u);
 
     auto cb = std::move(work->cb);
     work->cb = nullptr;
 
-    cb(work->slot, std::span<std::byte>(reinterpret_cast<std::byte*>(d), s));
+    cb(std::span<char>(d, s));
+
+    // can we process anything in the queue?
+
+    if (!queue_.empty())
+    {
+      for (auto& w : workers_)
+      {
+        if (!w.cb) // this decoder is free
+        {
+          auto& req = queue_.front();
+
+          w.cb = std::move(req.cb);
+
+          emscripten_call_worker(w.handle, req.fname.c_str(), req.data_to_send.data(), req.data_to_send.size(), callback, &w);
+
+          queue_.pop();
+
+          break; // can be a maximum of 1 queue entry invoked as we've only freed 1 worker
+        }
+      }
+    }
   }
 
 
+  // each worker has a work structure which stores it's handle/id and if there is work in progress, the callback function
+  // to call once the work is complete
+
   struct work
   {
-    worker_handle                               handle;
-    int                                         slot;
-    std::function< void (int, std::span<std::byte>)> cb;
+    worker_handle                          handle;
+    std::function< void (std::span<char>)> cb;
   };
 
-  inline static std::vector<work> decoders_;
+  inline static std::vector<work> workers_;
+
+
+  // If all the workers are busy, we copy the work request for submission later
+
+  struct work_request
+  {
+    work_request(std::string fname, std::vector<char>&& data_to_send, std::function< void (std::span<char>)>&& cb) :
+      fname(fname),
+      data_to_send(std::move(data_to_send)),
+      cb(std::move(cb))
+    {
+    }
+
+    std::string                            fname;
+    std::vector<char>                      data_to_send;
+    std::function< void (std::span<char>)> cb;
+  };
+
+  inline static std::queue<work_request> queue_;
+
+  inline static std::string path_;
+  inline static int num_workers_{0};
+ 
 
 }; // class worker

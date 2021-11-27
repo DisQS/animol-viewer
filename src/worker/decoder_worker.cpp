@@ -29,10 +29,17 @@ struct fp
 };
 
 
-void save_to_file(std::span<std::byte> data, std::string filename)
+void save_to_file(std::span<char> data, std::string filename)
 {
   auto f = fopen(filename.c_str(), "w");
   fwrite(data.data(), 1, data.size(), f);
+  fclose(f);
+}
+
+void save_bytes_to_file(std::span<std::byte> data, std::string filename)
+{
+  auto f = fopen(filename.c_str(), "w");
+  fwrite(reinterpret_cast<char*>(data.data()), 1, data.size(), f);
   fclose(f);
 }
 
@@ -68,7 +75,7 @@ void do_script()
   
   read_from_file(script_file, "/i.script");
   
-  emscripten_worker_respond_provisionally(reinterpret_cast<char*>(script_file.data()), script_file.size());
+  emscripten_worker_respond_provisionally(script_file.data(), script_file.size());
 }
 
 
@@ -80,7 +87,7 @@ void script(char* data, int size)
 
   auto h = plate::async::request(std::string(sv), "GET", "", [] (std::uint32_t handle, plate::data_store&& d)
   {
-    save_to_file(d.span(), "/i.pdb");
+    save_bytes_to_file(d.span(), "/i.pdb");
 
     do_script();
 
@@ -98,19 +105,9 @@ void script(char* data, int size)
 
 void script_with(char* data, int size)
 {
-  save_to_file(std::span<std::byte>(reinterpret_cast<std::byte*>(data), size), "/i.pdb");
+  save_to_file(std::span<char>(data, size), "/i.pdb");
   
   do_script();
-}
-
-
-// data is the script contents to use
-
-void use_script(char* data, int size)
-{
-  save_to_file(std::span<std::byte>(reinterpret_cast<std::byte*>(data), size), "/i.script");
-
-  emscripten_worker_respond_provisionally(nullptr, 0);
 }
 
 
@@ -131,16 +128,34 @@ void do_decode(int options)
 }
 
 
-// data is the url of the pdb file to download and decode
+// data is: size_of_script, script_contents, pdb_url file to download and decode
 
-void decode_url(char* data, int size, int options) // does not return colours
+void decode_url(char* data, int size, int options)
 {
-
-  std::string_view sv(data, size);
-
-  auto h = plate::async::request(std::string(sv), "GET", "", [options] (std::uint32_t handle, plate::data_store&& d)
+  if (size < 4)
   {
-    save_to_file(d.span(), "/i.pdb");
+    log_debug(FMT_COMPILE("decode_url: size too small: {}"), size);
+    emscripten_worker_respond_provisionally(nullptr, 0);
+  }
+
+  std::uint32_t script_sz;
+  std::memcpy(&script_sz, data, 4);
+
+  if (script_sz + 4 >= size)
+  {
+    log_debug(FMT_COMPILE("decode_url: size too small for script and url: {}"), size);
+    emscripten_worker_respond_provisionally(nullptr, 0);
+  }
+
+  std::span<char> script(data + 4, script_sz);
+
+  std::string url(data + 4 + script_sz, size - (script_sz + 4));
+
+  save_to_file(script, "i.script");
+
+  auto h = plate::async::request(url, "GET", "", [options] (std::uint32_t handle, plate::data_store&& d)
+  {
+    save_bytes_to_file(d.span(), "/i.pdb");
 
     do_decode(options);
 
@@ -153,6 +168,8 @@ void decode_url(char* data, int size, int options) // does not return colours
   {});
 }
 
+
+// data is: size_of_script, script_data, pdb_url
 
 void decode_url_color_interleaved(char* data, int size)
 {
@@ -172,12 +189,33 @@ void decode_url_no_color(char* data, int size)
 }
 
 
-// data is the pdb file contents, or, if size is 0, use the current pdb file
+// data is: size_of_script, script_contents, pdb file contents
 
 void decode_contents(char* data, int size, int options)
 {
-  if (size > 0)
-    save_to_file(std::span<std::byte>(reinterpret_cast<std::byte*>(data), size), "/i.pdb");
+  if (size < 4)
+  {
+    log_debug(FMT_COMPILE("decode_contents: size too small: {}"), size);
+    emscripten_worker_respond_provisionally(nullptr, 0);
+  }
+    
+  std::uint32_t script_sz;
+  std::memcpy(&script_sz, data, 4);
+      
+  if (script_sz + 4 >= size)
+  {
+    log_debug(FMT_COMPILE("decode_contents: size too small for script and pdb contents: {} script_size: {}"),
+                                                                                                size, script_sz);
+    emscripten_worker_respond_provisionally(nullptr, 0);
+  }
+    
+  std::span<char> script(data + 4, script_sz);
+    
+  save_to_file(script, "/i.script");
+
+  std::span<char> contents(data + 4 + script_sz, size - (script_sz + 4));
+  
+  save_to_file(contents, "/i.pdb");
 
   do_decode(options);
 }

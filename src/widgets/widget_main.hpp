@@ -60,8 +60,8 @@ public:
 
     if (url != "")
       start_remote(url, code);
-
-    set_load_button();
+    else
+      set_load_button();
   }
 
 
@@ -85,7 +85,9 @@ public:
 
     set_title();
     set_loading();
-    set_load_button();
+
+    if (widget_select_)
+      set_load_button();
 
     if (widget_object_)
       widget_object_->set_geometry(coords_);
@@ -109,8 +111,6 @@ private:
     item_  = code;
     url_   = url;
 
-    log_debug(FMT_COMPILE("starting remote: {}"), item_);
-
     set_title();
     set_loading();
 
@@ -118,6 +118,8 @@ private:
 
     auto h = async::request(url_ + item_ + "/movie.plan", "GET", "", [this] (std::uint32_t handle, plate::data_store&& d)
     {
+      emscripten_webgl_make_context_current(ui_->ctx_);
+
       // read in list of pdb files
 
       std::string_view sv{reinterpret_cast<char*>(d.span().data()), d.span().size()};
@@ -195,16 +197,34 @@ private:
   {
     set_loading();
 
+    worker::set_path("/animol-viewer/version/1/decoder_worker.js");
+
     if (local_)
     {
       // load in file and then request the worker to generate the script
 
       ui_event::directory_load_file(item_, pdb_list_[current_entry_], [this] (std::string&& pdb)
       {
-        worker::call("script_with", pdb, [this] (int slot, std::span<std::byte> d)
+        worker::call("script_with", pdb, [this, pdb] (std::span<char> d)
         {
-          script_ = std::string(reinterpret_cast<const char*>(d.data()), d.size());
-          get_first_frame(slot);
+          script_ = std::string(d.data(), d.size());
+
+          std::vector<char> data_to_send(4);
+
+          std::uint32_t script_size = script_.size();
+
+          std::memcpy(data_to_send.data(), &script_size, 4);
+
+          data_to_send.insert(data_to_send.end(), script_.begin(), script_.end());
+          data_to_send.insert(data_to_send.end(),     pdb.begin(),     pdb.end());
+
+          worker::call(SHARED_COLORS ? "decode_contents_color_non_interleaved" : "decode_contents_color_interleaved", data_to_send,
+            [this] (std::span<char> d)
+          {
+            emscripten_webgl_make_context_current(ui_->ctx_);
+
+            process_main_frame(d);
+          });
         });
       });
     }
@@ -214,30 +234,43 @@ private:
 
       std::string u = url_ + item_ + "/" + pdb_list_[current_entry_];
 
-      worker::call("script", u, [this] (int slot, std::span<std::byte> d)
+      worker::call("script", u, [this] (std::span<char> d)
       {
-        script_ = std::string(reinterpret_cast<const char*>(d.data()), d.size());
-        get_first_frame(slot);
+        script_ = std::string(d.data(), d.size());
+        get_first_frame();
       });
     }
   }
 
 
-  void get_first_frame(int slot) noexcept
+  void get_first_frame() noexcept
   {
     // script has been generated, so run the decoder with the main frame,
     //
     // once the main frame has been generated, upload the script to all the workers and start processing the subsequent frames
 
-    worker::call_slot(slot, SHARED_COLORS ? "decode_contents_color_non_interleaved" : "decode_contents_color_interleaved", "",
-      [this] (int slot, std::span<std::byte> d)
+    std::string u = url_ + item_ + "/" + pdb_list_[current_entry_];
+
+    std::vector<char> data_to_send(4);
+
+    std::uint32_t script_size = script_.size();
+
+    std::memcpy(data_to_send.data(), &script_size, 4);
+
+    data_to_send.insert(data_to_send.end(), script_.begin(), script_.end());
+    data_to_send.insert(data_to_send.end(),       u.begin(),       u.end());
+
+    worker::call(SHARED_COLORS ? "decode_url_color_non_interleaved" : "decode_url_color_interleaved", data_to_send,
+      [this] (std::span<char> d)
     {
+      emscripten_webgl_make_context_current(ui_->ctx_);
+
       process_main_frame(d);
     });
   }
 
 
-  void process_next(int slot) noexcept
+  void process_next() noexcept
   {
     if (to_load_.empty()) // nothing left to ask for
       return;
@@ -247,12 +280,22 @@ private:
 
     if (local_)
     {
-      ui_event::directory_load_file(item_, pdb_list_[to_load], [this, slot, entry = to_load] (std::string&& pdb)
+      ui_event::directory_load_file(item_, pdb_list_[to_load], [this, entry = to_load] (std::string&& pdb)
       {
-        worker::call_slot(slot, SHARED_COLORS ? "decode_contents_no_color" : "decode_contents_color_interleaved", pdb,
-          [this, entry] (int slot, std::span<std::byte> d)
+        std::vector<char> data_to_send(4);
+
+        std::uint32_t script_size = script_.size();
+
+        std::memcpy(data_to_send.data(), &script_size, 4);
+
+        data_to_send.insert(data_to_send.end(), script_.begin(), script_.end());
+        data_to_send.insert(data_to_send.end(),     pdb.begin(),     pdb.end());
+
+        worker::call(SHARED_COLORS ? "decode_contents_no_color" : "decode_contents_color_interleaved", data_to_send,
+          [this, entry] (std::span<char> d)
         {
-          process_decoded(entry, slot, d);
+          emscripten_webgl_make_context_current(ui_->ctx_);
+          process_decoded(entry, d);
         });
       });
     }
@@ -260,20 +303,30 @@ private:
     {
       std::string u = url_ + item_ + "/" + pdb_list_[to_load];
 
-      worker::call_slot(slot, SHARED_COLORS ? "decode_url_no_color" : "decode_url_color_interleaved", u,
-        [this, entry = to_load] (int slot, std::span<std::byte> d)
+      std::vector<char> data_to_send(4);
+
+      std::uint32_t script_size = script_.size();
+
+      std::memcpy(data_to_send.data(), &script_size, 4);
+
+      data_to_send.insert(data_to_send.end(), script_.begin(), script_.end());
+      data_to_send.insert(data_to_send.end(),       u.begin(),       u.end());
+
+      worker::call(SHARED_COLORS ? "decode_url_no_color" : "decode_url_color_interleaved", data_to_send,
+        [this, entry = to_load] (std::span<char> d)
       { 
-        process_decoded(entry, slot, d);
+        emscripten_webgl_make_context_current(ui_->ctx_);
+        process_decoded(entry, d);
       });
     }
   }
 
 
-  void process_decoded(int entry, int slot, std::span<std::byte> d) noexcept
+  void process_decoded(int entry, std::span<char> d) noexcept
   {
     compact_header* h = new (d.data()) compact_header;
 
-    auto p = d.data() + sizeof(compact_header);
+    auto p = reinterpret_cast<std::byte*>(d.data()) + sizeof(compact_header);
 
     //log_debug(FMT_COMPILE("frame: {} triangles: {} strips: {}"), entry, h->num_triangles, h->num_strips);
 
@@ -283,17 +336,17 @@ private:
     store_[entry].vertex_strip.upload(p, h->num_strips, GL_TRIANGLE_STRIP);
 
     process_frame(entry);
-    process_next(slot);
+    process_next();
   }
 
 
-  void process_main_frame(std::span<std::byte> d) noexcept
+  void process_main_frame(std::span<char> d) noexcept
   {
     // main frame has been converted to geometry
 
     compact_header* h = new (d.data()) compact_header;
 
-    auto p = d.data() + sizeof(compact_header);
+    auto p = reinterpret_cast<std::byte*>(d.data()) + sizeof(compact_header);
 
     log_debug(FMT_COMPILE("main frame triangles: {} strips: {}"), h->num_triangles, h->num_strips);
 
@@ -313,10 +366,10 @@ private:
       shared_vertex_strip_colors_.upload(p, h->num_strips);
     }
 
-    worker::call_all("use_script", script_, [this] (int slot, std::span<std::byte> d)
-    {
-      process_next(slot);
-    });
+    // start number_of_worker_threads processing
+
+    for (int i = 0; i < worker::get_num_workers(); ++i)
+      process_next();
 
     widget_object_ = ui_event_destination::make_ui<widget_object<vert, cols>>(ui_, coords_,
                                           Prop::Display | Prop::Input | Prop::Swipe | Prop::Priority, shared_from_this());
@@ -326,7 +379,7 @@ private:
 
     // loop through data to find protein width
 
-    p = d.data() + sizeof(compact_header);
+    p = reinterpret_cast<std::byte*>(d.data()) + sizeof(compact_header);
 
     int max = 0;
 
@@ -361,8 +414,6 @@ private:
 
     if (loaded_count_ == pdb_list_.size())
     {
-      worker::stop();
-
       log_debug(FMT_COMPILE("all loaded: {}"), loaded_count_);
     }
 

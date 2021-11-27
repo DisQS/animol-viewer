@@ -39,7 +39,6 @@ std::set<int> touch_avail_{0,1,2,3,4,5,6,7,8,9};
 std::map<int, int> touch_mapping_; // maps touch identifiers to the touch number...
                                    // ie.. touch x comes in first that is number 0...
 
-
 EM_JS(int, js_get_device_type, (),
 {
   const ua = navigator.userAgent;
@@ -68,6 +67,38 @@ EM_JS(int, js_is_touch_device, (),
 
   return 0;
 });
+
+
+// captures input on a pointerdown so that all subsequent events are sent to it, eg: move, up, etc
+
+EM_JS(void, js_capture, (const char* t, int t_len),
+{
+  var c = UTF8ToString(t, t_len);
+
+  const f = document.querySelector(c);
+
+  if (f)
+  {
+    f.addEventListener('pointerdown', ev =>
+    {
+      f.setPointerCapture(ev.pointerId);
+    });
+  }
+});
+
+
+EM_JS(void, js_uncapture, (const char* t, int t_len),
+{
+  var c = UTF8ToString(t, t_len);
+
+  const f = document.querySelector(c);
+
+  if (f)
+  {
+    f.removeEventListener('pointerdown');
+  }
+});
+
 
 
 EM_JS(void, js_vibrate, (int t),
@@ -320,61 +351,17 @@ void stop()
 {
   auto ss = states_;
 
-  for (auto& [s, name] : ss) rm_dest(s, name);
+  for (auto& [s, name] : ss)
+    rm_dest(s, name);
 
   // event: window_size
 
   emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, 1, nullptr);
 
-
-  // event: window_focus
-
-  emscripten_set_focus_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, 1, nullptr);
-
-  // these aren't working...?
-  //emscripten_set_focusin_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, 1, nullptr);
-  //emscripten_set_focusout_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, 1, nullptr);
-
-
   // event: orientation
 
   emscripten_set_orientationchange_callback(nullptr, 1, nullptr);
-
-  // event: key
-
-  emscripten_set_keypress_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, 1, nullptr);
-  emscripten_set_keydown_callback (EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, 1, nullptr);
-  emscripten_set_keyup_callback   (EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, 1, nullptr);
-
-
-  // event: mouse_position
-
-  emscripten_set_mousemove_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, 1, nullptr);
-
-  // event: mouse_over
-
-  emscripten_set_mouseover_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, 1, nullptr);
-  emscripten_set_mouseout_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, 1, nullptr);
-
-  // event: mouse_button
-
-  emscripten_set_mousedown_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, 1, nullptr);
-  emscripten_set_mouseup_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, 1, nullptr);
-  emscripten_set_click_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, 1, nullptr);
-  emscripten_set_dblclick_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, 1, nullptr);
-
-
-  // event: scroll_wheel
-
-  emscripten_set_wheel_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, 1, nullptr);
-
-  // event: touch
-
-  emscripten_set_touchstart_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, 1, nullptr);
-  emscripten_set_touchend_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, 1, nullptr);
-  emscripten_set_touchmove_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, 1, nullptr);
-  emscripten_set_touchcancel_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, 1, nullptr);
-};
+}
 
 
 void init();
@@ -413,6 +400,9 @@ void to_fullscreen()
 
 EM_BOOL f_context_lost(int event_type, const void* reserved, void* user_data)
 {
+  if (!user_data)
+    return EM_FALSE;
+
   log_debug(FMT_COMPILE("Got context lost type: {}"), event_type);
 
   return EM_TRUE;
@@ -428,13 +418,14 @@ EM_BOOL f_window_size(int event_type, const EmscriptenUiEvent* e, [[maybe_unused
 //  window_size(e->windowInnerWidth, e->windowInnerHeight);
 //
   return EM_TRUE;
-};
-
-
+}
 
 
 EM_BOOL f_window_focus(int event_type, [[maybe_unused]] const EmscriptenFocusEvent *e, void* user_data)
 {
+  if (!user_data)
+    return EM_FALSE;
+
   state* s = reinterpret_cast<plate::state*>(user_data);
 
   emscripten_webgl_make_context_current(s->ctx_);
@@ -448,7 +439,7 @@ EM_BOOL f_window_focus(int event_type, [[maybe_unused]] const EmscriptenFocusEve
   }
 
   return EM_FALSE;
-};
+}
 
 
 EM_BOOL f_orientation([[maybe_unused]] int event_type, const EmscriptenOrientationChangeEvent *e, [[maybe_unused]] void *user_data)
@@ -463,6 +454,9 @@ EM_BOOL f_orientation([[maybe_unused]] int event_type, const EmscriptenOrientati
 
 EM_BOOL f_key(int event_type, const EmscriptenKeyboardEvent *e, void *user_data)
 {
+  if (!user_data)
+    return EM_FALSE;
+
   //log_debug(FMT_COMPILE("got key event_type: {}"), event_type);
 
   enum KeyEvent event;
@@ -509,11 +503,16 @@ EM_BOOL f_key(int event_type, const EmscriptenKeyboardEvent *e, void *user_data)
   }
 
   return EM_TRUE;
-};
+}
 
 
 EM_BOOL f_mouse_position(int event_type, const EmscriptenMouseEvent *e, [[maybe_unused]] void *user_data)
 {
+  if (!user_data)
+    return EM_FALSE;
+
+  //log_debug(FMT_COMPILE("f_mouse_position targetX: {} event_type: {} user_data: {}"), e->targetX, event_type, user_data);
+
   int button = 0;
   switch (e->button)
   {
@@ -543,11 +542,13 @@ EM_BOOL f_mouse_position(int event_type, const EmscriptenMouseEvent *e, [[maybe_
     case EMSCRIPTEN_EVENT_MOUSEDOWN:
 
       s->incoming_mouse_button(MouseButtonEventDown, static_cast<enum MouseButton>(button), static_cast<enum KeyMod>(mods));
+
       break;
 
     case EMSCRIPTEN_EVENT_MOUSEUP:
 
       s->incoming_mouse_button(MouseButtonEventUp, static_cast<enum MouseButton>(button), static_cast<enum KeyMod>(mods));
+
       break;
 
     case EMSCRIPTEN_EVENT_DBLCLICK:
@@ -569,26 +570,30 @@ EM_BOOL f_mouse_position(int event_type, const EmscriptenMouseEvent *e, [[maybe_
   }
 
   return EM_TRUE;
-};
+}
 
 
 EM_BOOL f_scroll_wheel([[maybe_unused]] int event_type, const EmscriptenWheelEvent *e, void *user_data)
 {
+  if (!user_data)
+    return EM_FALSE;
+
   state* s = reinterpret_cast<plate::state*>(user_data);
 
   emscripten_webgl_make_context_current(s->ctx_);
 
   return s->incoming_scroll_wheel(e->deltaX, e->deltaY);
-};
+}
 
 
 EM_BOOL f_touch(int event_type, const EmscriptenTouchEvent *e, void *user_data)
 {
+  if (!user_data)
+    return EM_FALSE;
+
   state* s = reinterpret_cast<plate::state*>(user_data);
 
   emscripten_webgl_make_context_current(s->ctx_);
-
-  //log_debug(FMT_COMPILE("got: {} touches"), e->numTouches);
 
   for (int i = 0; i < e->numTouches; i++)
   {
@@ -599,7 +604,6 @@ EM_BOOL f_touch(int event_type, const EmscriptenTouchEvent *e, void *user_data)
 
     auto x = t.targetX * s->pixel_ratio_;
     auto y = s->pixel_height_ - (t.targetY * s->pixel_ratio_);
-
 
     int id;
 
@@ -635,38 +639,36 @@ EM_BOOL f_touch(int event_type, const EmscriptenTouchEvent *e, void *user_data)
   }
 
   return EM_TRUE;
-};
+}
 
-
-
-// EMSCRIPTEN_EVENT_TARGET_WINDOW
 
 void init()
 {
   // event: window_resize
 
-  emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, 1, f_window_size);
+  emscripten_set_resize_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, nullptr, EM_TRUE, f_window_size);
 
   // event: orientation
 
-  emscripten_set_orientationchange_callback(nullptr, 1, f_orientation);
-};
+  emscripten_set_orientationchange_callback(nullptr, EM_TRUE, f_orientation);
+}
 
 
 template<class S>
 void add_dest(S* s, std::string canvas)
 {
   if (!initialised_)
-  {
     initialised_ = true;
-//    init();
-  }
 
   states_.emplace_back(s, canvas);
 
+  // use javascript to set pointer capture
+
+  js_capture(canvas.c_str(), canvas.size());
+
   // webgl context
     
-  emscripten_set_webglcontextlost_callback(canvas.c_str(), s, 1, f_context_lost);
+  emscripten_set_webglcontextlost_callback(canvas.c_str(), s, EM_TRUE, f_context_lost);
 
   // event: window_focus
 
@@ -678,56 +680,46 @@ void add_dest(S* s, std::string canvas)
   emscripten_set_keydown_callback (canvas.c_str(), s, EM_TRUE, f_key);
   emscripten_set_keyup_callback   (canvas.c_str(), s, EM_TRUE, f_key);
   
-  
   // event: mouse_position
   
-  emscripten_set_mousemove_callback(canvas.c_str(), s, 1, f_mouse_position);
-  //emscripten_set_mousemove_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, s, 1, f_mouse_position);
+  emscripten_set_mousemove_callback(canvas.c_str(), s, EM_TRUE, f_mouse_position);
   
   // event: mouse_over
   
-  emscripten_set_mouseover_callback(canvas.c_str(), s, 1, f_mouse_position);
-  emscripten_set_mouseout_callback(canvas.c_str(), s, 1, f_mouse_position);
-  //emscripten_set_mouseover_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, s, 1, f_mouse_position);
-  //emscripten_set_mouseout_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, s, 1, f_mouse_position);
+  emscripten_set_mouseover_callback(canvas.c_str(), s, EM_TRUE, f_mouse_position);
+  emscripten_set_mouseout_callback (canvas.c_str(), s, EM_TRUE, f_mouse_position);
   
   // event: mouse_button
   
-  emscripten_set_mousedown_callback(canvas.c_str(), s, 1, f_mouse_position);
-  //emscripten_set_mouseup_callback(canvas.c_str(), s, 1, f_mouse_position);
-  emscripten_set_click_callback(canvas.c_str(), s, 1, f_mouse_position);
-  emscripten_set_dblclick_callback(canvas.c_str(), s, 1, f_mouse_position);
-  //emscripten_set_mousedown_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, s, 1, f_mouse_position);
-  emscripten_set_mouseup_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, s, 1, f_mouse_position);
-  //emscripten_set_click_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, s, 1, f_mouse_position);
-  //emscripten_set_dblclick_callback(EMSCRIPTEN_EVENT_TARGET_WINDOW, s, 1, f_mouse_position);
-  
+  emscripten_set_mousedown_callback(canvas.c_str(), s, EM_TRUE, f_mouse_position);
+  emscripten_set_mouseup_callback  (canvas.c_str(), s, EM_TRUE, f_mouse_position);
+  emscripten_set_click_callback    (canvas.c_str(), s, EM_TRUE, f_mouse_position);
+  emscripten_set_dblclick_callback (canvas.c_str(), s, EM_TRUE, f_mouse_position);
   
   // event: scroll_wheel
   
   emscripten_set_wheel_callback(canvas.c_str(), s, 1, f_scroll_wheel);
-
   
   // event: touch
   
-  emscripten_set_touchstart_callback(canvas.c_str(), s, 0, f_touch);
-  emscripten_set_touchend_callback(canvas.c_str(), s, 0, f_touch);
-  emscripten_set_touchmove_callback(canvas.c_str(), s, 0, f_touch);
-  emscripten_set_touchcancel_callback(canvas.c_str(), s, 0, f_touch);
-};
+  emscripten_set_touchstart_callback (canvas.c_str(), s, EM_TRUE, f_touch);
+  emscripten_set_touchend_callback   (canvas.c_str(), s, EM_TRUE, f_touch);
+  emscripten_set_touchmove_callback  (canvas.c_str(), s, EM_TRUE, f_touch);
+  emscripten_set_touchcancel_callback(canvas.c_str(), s, EM_TRUE, f_touch);
+}
 
 
 template<class S> // plate::state
 void rm_dest(S* s, std::string canvas)
 {
   for (std::size_t i = 0; i < states_.size(); ++i)
-  {
     if (states_[i].first == s)
-    {
       states_.erase(states_.begin() + i);
-    }
-  }
   
+  // use javascript to unset pointer capture
+
+  js_uncapture(canvas.c_str(), canvas.size());
+
   // webgl context
     
   emscripten_set_webglcontextlost_callback(canvas.c_str(), nullptr, 1, nullptr);
@@ -742,44 +734,33 @@ void rm_dest(S* s, std::string canvas)
   emscripten_set_keydown_callback (canvas.c_str(), nullptr, EM_TRUE, nullptr);
   emscripten_set_keyup_callback   (canvas.c_str(), nullptr, EM_TRUE, nullptr);
   
-  
   // event: mouse_position
   
-  //emscripten_set_mousemove_callback(canvas.c_str(), nullptr, 1, nullptr);
-  emscripten_set_mousemove_callback(EMSCRIPTEN_EVENT_TARGET_SCREEN, nullptr, 1, nullptr);
+  emscripten_set_mousemove_callback(canvas.c_str(), nullptr, EM_TRUE, nullptr);
   
   // event: mouse_over
   
-  //emscripten_set_mouseover_callback(canvas.c_str(), nullptr, 1, nullptr);
-  //emscripten_set_mouseout_callback(canvas.c_str(), nullptr, 1, nullptr);
-  emscripten_set_mouseover_callback(EMSCRIPTEN_EVENT_TARGET_SCREEN, nullptr, 1, nullptr);
-  emscripten_set_mouseout_callback(EMSCRIPTEN_EVENT_TARGET_SCREEN, nullptr, 1, nullptr);
+  emscripten_set_mouseover_callback(canvas.c_str(), nullptr, EM_TRUE, nullptr);
+  emscripten_set_mouseout_callback (canvas.c_str(), nullptr, EM_TRUE, nullptr);
   
   // event: mouse_button
   
-  //emscripten_set_mousedown_callback(canvas.c_str(), nullptr, 1, nullptr);
-  //emscripten_set_mouseup_callback(canvas.c_str(), nullptr, 1, nullptr);
-  //emscripten_set_click_callback(canvas.c_str(), nullptr, 1, nullptr);
-  //emscripten_set_dblclick_callback(canvas.c_str(), nullptr, 1, nullptr);
-  emscripten_set_mousedown_callback(EMSCRIPTEN_EVENT_TARGET_SCREEN, nullptr, 1, nullptr);
-  emscripten_set_mouseup_callback(EMSCRIPTEN_EVENT_TARGET_SCREEN, nullptr, 1, nullptr);
-  emscripten_set_click_callback(EMSCRIPTEN_EVENT_TARGET_SCREEN, nullptr, 1, nullptr);
-  emscripten_set_dblclick_callback(EMSCRIPTEN_EVENT_TARGET_SCREEN, nullptr, 1, nullptr);
-  
+  emscripten_set_mousedown_callback(canvas.c_str(), nullptr, EM_TRUE, nullptr);
+  emscripten_set_mouseup_callback  (canvas.c_str(), nullptr, EM_TRUE, nullptr);
+  emscripten_set_click_callback    (canvas.c_str(), nullptr, EM_TRUE, nullptr);
+  emscripten_set_dblclick_callback (canvas.c_str(), nullptr, EM_TRUE, nullptr);
   
   // event: scroll_wheel
   
-  emscripten_set_wheel_callback(canvas.c_str(), nullptr, 1, nullptr);
-  
+  emscripten_set_wheel_callback(canvas.c_str(), nullptr, EM_TRUE, nullptr);
   
   // event: touch
   
-  emscripten_set_touchstart_callback(canvas.c_str(), nullptr, 0, nullptr);
-  emscripten_set_touchend_callback(canvas.c_str(), nullptr, 0, nullptr);
-  emscripten_set_touchmove_callback(canvas.c_str(), nullptr, 0, nullptr);
-  emscripten_set_touchcancel_callback(canvas.c_str(), nullptr, 0, nullptr);
-};
-
+  emscripten_set_touchstart_callback (canvas.c_str(), nullptr, EM_TRUE, nullptr);
+  emscripten_set_touchend_callback   (canvas.c_str(), nullptr, EM_TRUE, nullptr);
+  emscripten_set_touchmove_callback  (canvas.c_str(), nullptr, EM_TRUE, nullptr);
+  emscripten_set_touchcancel_callback(canvas.c_str(), nullptr, EM_TRUE, nullptr);
+}
 
 
 }; // namespace ui_event
@@ -796,7 +777,10 @@ void f_fragment_change(std::string name)
   using namespace plate;
 
   for (auto& [s, n] : ui_event::states_)
+  {
+    emscripten_webgl_make_context_current(s->ctx_);
     s->fragment_change(name);
+  }
 }
 
 
@@ -806,11 +790,12 @@ void f_canvas_resize_exact(std::string name, int width, int height)
 
   auto name_s = "#" + name.substr(0, name.length()-3);
 
-  //LOG_DEBUG("Got c++ resize for: %s %s", name.c_str(), name_s.c_str());
+  //log_debug(FMT_COMPILE("Got resize_exact for: {} {}"), name, name_s);
 
   for (auto& [s, n] : ui_event::states_)
     if (name_s == n)
     {
+      emscripten_webgl_make_context_current(s->ctx_);
       arch_resize(s, width, height);
       break;
     }
@@ -823,11 +808,12 @@ void f_canvas_resize(std::string name)
 
   auto name_s = "#" + name.substr(0, name.length()-3);
 
-  //LOG_DEBUG("Got c++ resize for: %s %s", name.c_str(), name_s.c_str());
+  //log_debug(FMT_COMPILE("Got resize for: {} {}"), name, name_s);
 
   for (auto& [s, n] : ui_event::states_)
     if (name_s == n)
     {
+      emscripten_webgl_make_context_current(s->ctx_);
       arch_resize(s);
       break;
     }

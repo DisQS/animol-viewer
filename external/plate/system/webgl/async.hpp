@@ -259,7 +259,8 @@ public:
         auto it = cbs_.find(handle);
         if (it != cbs_.end())
         {
-          if (it->second.on_progress) it->second.on_progress(handle, number_of_bytes, total_bytes);
+          if (it->second.on_progress)
+            it->second.on_progress(handle, number_of_bytes, total_bytes);
         }
         else { log_error("Not found async::on_progress"); }
       }
