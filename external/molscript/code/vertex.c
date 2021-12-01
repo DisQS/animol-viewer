@@ -98,7 +98,7 @@ static short current_normal_[3];
 static float current_colour_[4];
 static short current_colour_s_[4];
 
-static float res_ = 100.0; // fixme to calculate depending on heuristics for pdb values
+static float res_ = 400.0; // fixme to calculate depending on heuristics for pdb values
 
 inline short to_short(float x)
 {
