@@ -806,7 +806,7 @@ public:
       w->ui_scroll(x_delta, y_delta);
     }
 
-    return false;
+    return true;
   }
 
 
