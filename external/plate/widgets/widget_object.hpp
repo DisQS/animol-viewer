@@ -149,7 +149,8 @@ public:
       return true;
     }
 
-    move(m);
+    if (m.swipe)
+			move(m);
 
     return true;
   }

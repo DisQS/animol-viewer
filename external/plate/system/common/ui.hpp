@@ -379,9 +379,11 @@ public:
       mouse_metric_.history_x.push_back({ now, mouse_metric_.delta.x });
       mouse_metric_.history_y.push_back({ now, mouse_metric_.delta.y });
     
-      if (!mouse_metric_.swipe && ((abs(x - mouse_metric_.start_pos.x) > MOVE_STICKY) ||
-                                   (abs(y - mouse_metric_.start_pos.y) > MOVE_STICKY)))
-    {
+      auto sx = mouse_metric_.start_pos.x;
+      auto sy = mouse_metric_.start_pos.y;
+
+      if ( !mouse_metric_.swipe && ((x-sx)*(x-sx) + (y-sy)*(y-sy) > MOVE_STICKY) )
+      {
         mouse_metric_.swipe = true;
         mouse_metric_.start_pos2.x = x;
         mouse_metric_.start_pos2.y = y;
@@ -589,6 +591,7 @@ public:
 
   void incoming_touch(ui_event::TouchEvent event, int id, int x, int y)
   {
+		//RM! log_debug(FMT_COMPILE("Touch: {}: {} {}, {} {}"), id, x, touch_metric_[id].pos.x, y, touch_metric_[id].pos.y);
     do_draw();
 
     if (id < 0 || id >= MAX_TOUCHES)
@@ -738,7 +741,10 @@ public:
 
         bool enable_touch_move_find_widget = false; // if the user is swiping and the current widget doesn't support swipe, search
 
-        if (!m.swipe && ((abs(x - m.start_pos.x) > MOVE_STICKY) || (abs(y - m.start_pos.y) > MOVE_STICKY)))
+        auto sx = m.start_pos.x;
+        auto sy = m.start_pos.y;
+
+        if ( !m.swipe && ((x-sx)*(x-sx) + (y-sy)*(y-sy) > MOVE_STICKY) )
         {
           m.swipe = true;
           m.start_pos2.x = x;
@@ -909,9 +915,9 @@ public:
 
   // state
 
-  constexpr static int MAX_TOUCHES = 10;   // maximum number of simultaneous touches to allow
-  constexpr static int MOVE_STICKY = 15;   // how far a move has to be for it to register, as sometimes
-                                           // just clicking also has a small small part
+  constexpr static int MAX_TOUCHES = 10;    // maximum number of simultaneous touches to allow
+  constexpr static int MOVE_STICKY = 15*15; // how far a move has to be for it to register (squared),
+                                            // as sometimes just clicking also has a small small part
 
   struct metric_data
   {
