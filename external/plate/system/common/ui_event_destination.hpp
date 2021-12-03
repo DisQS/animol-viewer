@@ -632,6 +632,11 @@ public:
     return true;
   }
 
+	virtual bool ui_zoom_update() noexcept
+  {
+    return true;
+  }
+
 //  virtual bool ui_move(metric_data& m) { return false; }
 //  virtual void ui_state(metric_data& m) { }
 //  virtual void ui_zoom(gpu::float_point zoom, gpu::float_point shift) { }

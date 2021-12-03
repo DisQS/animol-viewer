@@ -163,6 +163,9 @@ public:
     for (int i = 0; i < MAX_TOUCHES; ++i)
       if (touch_metric_[i].current == t)
         touch_metric_[i].current = nullptr;
+
+    //RM:if (double_touch_metric_.current == t)
+      //double_touch_metric_.current = nullptr;
   };
 
 
@@ -591,7 +594,6 @@ public:
 
   void incoming_touch(ui_event::TouchEvent event, int id, int x, int y)
   {
-		//RM! log_debug(FMT_COMPILE("Touch: {}: {} {}, {} {}"), id, x, touch_metric_[id].pos.x, y, touch_metric_[id].pos.y);
     do_draw();
 
     if (id < 0 || id >= MAX_TOUCHES)
@@ -606,12 +608,15 @@ public:
     {
       case ui_event::TouchEventDown:
       {
+        m.id = id;
+
         m.pos.x = x;
         m.pos.y = y;
 
         m.click        = false;
         m.double_click = false;
         m.swipe        = false;
+        m.swipe        = true;
 
         m.history_x.clear();
         m.history_y.clear();
@@ -635,18 +640,37 @@ public:
         auto w = top_widget_->tree_find_input(x, y, false);
 
         if (w)
-        {
           if (w->ui_touch_update(id))
           {
             m.current = w;
             return;
           }
-        }
 
         break;
       }
       case ui_event::TouchEventUp:
       {
+        if (m.multi)
+        {
+          int touch_count = 0;
+
+          for (const auto& n : touch_metric_)
+            if (n.st != 0)
+              touch_count++;
+
+          if (touch_count != 1)
+          {
+            m.st = 0;
+
+            for (auto& n : touch_metric_)
+              n.st = 0;
+
+            double_touch_metric_.dist = 0;
+
+            return;
+          }
+        }
+
         m.click = !m.swipe && ((now - m.down_start) <= 200);
         m.double_click = !m.swipe && ((now - m.prev_down_start) <= 400);
 
@@ -725,6 +749,31 @@ public:
 
         m.pos.x = x;
         m.pos.y = y;
+
+        //multitouch
+        for (auto& n : touch_metric_)
+        {
+          if (n.st != 0 && n.id != m.id)
+          {
+            int xdiff = m.pos.x - n.pos.x;
+            int ydiff = m.pos.y - n.pos.y;
+
+            float dist = std::sqrt(static_cast<double>(xdiff*xdiff + ydiff*ydiff));
+            double_touch_metric_.delta = dist / double_touch_metric_.dist;
+
+            double_touch_metric_.dist = dist;
+
+            auto w = top_widget_->tree_find_input(x, y, false);
+
+            if (w && double_touch_metric_.delta != std::numeric_limits<double>::infinity())
+              w->ui_zoom_update();
+
+            n.multi = true;
+            m.multi = true;
+
+            return;
+          }
+        }
 
         double now = ui_event::now();
 
@@ -927,6 +976,7 @@ public:
     bool   swipe        = false;       // true if there was movement between down and up button
     bool   click        = false;       // true if this has become a 'click'
     bool   double_click = false;       // true if this has become a double 'click'
+    bool   multi        = false;       // true if this is part of a multi-touch
   
     double prev_down_start{0};         // for working out whether a double click has happened.
     double      down_start{0};
@@ -947,6 +997,12 @@ public:
     T* current{nullptr};
   
     metric_data() {};
+  };
+
+  struct double_touch_metric_data
+  {
+    double dist{0};
+    double delta{0};
   };
 
 
@@ -982,6 +1038,7 @@ public:
   metric_data mouse_metric_;
   metric_data wheel_metric_;
 
+  double_touch_metric_data double_touch_metric_; 
 
   // window
 

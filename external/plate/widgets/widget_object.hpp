@@ -155,6 +155,14 @@ public:
     return true;
   }
 
+  bool ui_zoom_update() noexcept
+	{
+    scale_ *= ui_->double_touch_metric_.delta;
+
+    upload_uniform();
+
+		return true;
+	}
 
   bool ui_scroll(double x_delta, double y_delta) noexcept // zoom
   {
