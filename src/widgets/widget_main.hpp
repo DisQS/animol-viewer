@@ -57,11 +57,15 @@ public:
   void init(const std::shared_ptr<plate::state>& _ui, plate::gpu::int_box& coords, std::string url, std::string code) noexcept
   {
     ui_event_destination::init(_ui, coords, Prop::Display | Prop::Reshape);
+    log_debug(FMT_COMPILE("url: '{}'  code:'{}'"), url, code);
 
-    if (url != "")
+    if (url != "" && code != "")
       start_remote(url, code);
-    else
-      set_load_button();
+
+    //else
+    //  set_load_button();
+
+    set_load_button();
   }
 
 
@@ -539,7 +543,7 @@ private:
 
     gpu::int_box c;
 
-    c.p1.x = my_width() - (110 * ui_->pixel_ratio_);
+    c.p1.x = my_width() - (150 * ui_->pixel_ratio_);
     c.p1.y = my_height() - (70 * ui_->pixel_ratio_);
 
     c.p2.x = my_width()  - (10 * ui_->pixel_ratio_);
@@ -555,7 +559,7 @@ private:
       widget_box_ = ui_event_destination::make_ui<widget_rounded_box>(ui_, c, Prop::Display, shared_from_this(),
                                                                              ui_->select_color_, 15 * ui_->pixel_ratio_);
 
-      widget_select_ = ui_event_destination::make_ui<widget_text>(ui_, c, Prop::Display | Prop::Input, widget_box_, "Open",
+      widget_select_ = ui_event_destination::make_ui<widget_text>(ui_, c, Prop::Display | Prop::Input, widget_box_, "Open local",
                                                        gpu::align::CENTER, ui_->txt_color_, gpu::rotation{0.0f,0.0f,0.0f}, 0.8f);
 
       widget_select_->set_click_cb([this]
