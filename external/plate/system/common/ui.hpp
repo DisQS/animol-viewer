@@ -616,7 +616,6 @@ public:
         m.click        = false;
         m.double_click = false;
         m.swipe        = false;
-        m.swipe        = true;
 
         m.history_x.clear();
         m.history_y.clear();
