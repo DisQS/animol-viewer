@@ -12,11 +12,11 @@ class movie {
 
 public:
 
-  movie(std::string canvas, std::string url, std::string code) noexcept
+  movie(std::string canvas, std::string url, std::string code, std::string description) noexcept
   {
-    s_ = plate::create(canvas, "/font/Roboto-Regular-32-small-msdf.ttf", [this, url, code] (bool status)
+    s_ = plate::create(canvas, "/font/Roboto-Regular-32-small-msdf.ttf", [this, url, code, description] (bool status)
     {
-      run(url, code);
+      run(url, code, description);
     });
   }
 
@@ -24,7 +24,7 @@ public:
 private:
 
 
-  inline void run(std::string url, std::string code) noexcept
+  inline void run(std::string url, std::string code, std::string description) noexcept
   {
     if (!s_)
       return;
@@ -56,7 +56,7 @@ private:
 
     // start main widget
 
-    auto w = plate::ui_event_destination::make_ui<pdbmovie::widget_main<false>>(s_, b, url, code);
+    auto w = plate::ui_event_destination::make_ui<pdbmovie::widget_main<false>>(s_, b, url, code, description);
   }
 
 
@@ -69,6 +69,6 @@ private:
 EMSCRIPTEN_BINDINGS(movie)
 {
   emscripten::class_<movie>("movie")
-    .constructor<std::string, std::string, std::string>()
+    .constructor<std::string, std::string, std::string, std::string>()
     ;
 }

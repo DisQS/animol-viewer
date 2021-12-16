@@ -54,13 +54,13 @@ class widget_main : public plate::ui_event_destination
 public:
 
 
-  void init(const std::shared_ptr<plate::state>& _ui, plate::gpu::int_box& coords, std::string url, std::string code) noexcept
+  void init(const std::shared_ptr<plate::state>& _ui, plate::gpu::int_box& coords, std::string url, std::string code, std::string description) noexcept
   {
     ui_event_destination::init(_ui, coords, Prop::Display | Prop::Reshape);
     log_debug(FMT_COMPILE("url: '{}'  code:'{}'"), url, code);
 
     if (url != "" && code != "")
-      start_remote(url, code);
+      start_remote(url, code, description);
 
     //else
     //  set_load_button();
@@ -107,13 +107,14 @@ public:
 private:
 
 
-  void start_remote(std::string url, std::string code) noexcept
+  void start_remote(std::string url, std::string code, std::string description) noexcept
   {
     clear();
 
-    local_ = false;
-    item_  = code;
-    url_   = url;
+    local_       = false;
+    item_        = code;
+    url_         = url;
+    description_ = description;
 
     set_title();
     set_loading();
@@ -174,9 +175,10 @@ private:
   {
     clear();
 
-    local_    = true;
-    item_     = dir_name;
-    pdb_list_ = std::move(files);
+    local_       = true;
+    item_        = dir_name;
+    description_ = "";
+    pdb_list_    = std::move(files);
 
     log_debug(FMT_COMPILE("starting local: {} frames: {}"), item_, pdb_list_.size());
 
@@ -487,7 +489,12 @@ private:
 
   void set_title() noexcept
   {
-    std::string title = local_ ? "local: " + item_ : item_;
+    std::string title{};
+
+    if (description_ == "")
+      title = local_ ? "local: " + item_ : item_;
+    else
+      title = description_;
 
     gpu::int_box c = coords_;
     c.p1.y = my_height() - (70 * ui_->pixel_ratio_);
@@ -601,6 +608,8 @@ private:
   float frame_time_{1.0/30.0}; // 30 fps
 
   bool local_{false}; // whether we are loading local files or remote
+
+  std::string description_{}; // description of animation
 
   std::string item_;                  // item to load (either a protein code if remote, or a local directory name)
   std::vector<std::string> pdb_list_; // list of pdb files to display
