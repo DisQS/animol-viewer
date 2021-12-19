@@ -494,7 +494,7 @@ private:
     if (description_ == "")
       title = local_ ? "local: " + item_ : item_;
     else
-      title = description_;
+      title = item_ + ": " + description_;
 
     gpu::int_box c = coords_;
     c.p1.y = my_height() - (70 * ui_->pixel_ratio_);
