@@ -153,7 +153,7 @@ install:
 	./install.sh $(server)
 
 decoder_worker.js: ../src/worker/decoder_worker.cpp $(MOLAUTO_OBJS) $(MOLSCRIPT_OBJS)
-	$(CC) $(CFLAGS) $(MOLAUTO_OBJS) $(MOLSCRIPT_OBJS) -s EXPORTED_FUNCTIONS="['_end_worker', '_script', '_script_with', '_decode_url_color_interleaved', '_decode_url_color_non_interleaved','_decode_url_no_color','_decode_contents_color_interleaved','_decode_contents_color_non_interleaved','_decode_contents_no_color']" -s BUILD_AS_WORKER=1 -s FILESYSTEM=1 -s FETCH=1 -s DISABLE_EXCEPTION_CATCHING=1 -s -s TOTAL_MEMORY=320MB --bind --closure 1 -o decoder_worker.js ../src/worker/decoder_worker.cpp
+	$(CC) $(CFLAGS) $(MOLAUTO_OBJS) $(MOLSCRIPT_OBJS) -s EXPORTED_FUNCTIONS="['_end_worker', '_script', '_script_with', '_decode_url_color_interleaved', '_decode_url_color_non_interleaved','_decode_url_no_color','_decode_contents_color_interleaved','_decode_contents_color_non_interleaved','_decode_contents_no_color']" -s BUILD_AS_WORKER=1 -s FILESYSTEM=1 -s FETCH=1 -s DISABLE_EXCEPTION_CATCHING=1 -s -s ALLOW_MEMORY_GROWTH=1 --bind --closure 1 -o decoder_worker.js ../src/worker/decoder_worker.cpp
 
 clean:
 	rm -f $(NAME).js $(NAME).wasm
