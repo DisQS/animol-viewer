@@ -75,7 +75,7 @@ void do_script()
   
   read_from_file(script_file, "/i.script");
   
-  emscripten_worker_respond_provisionally(script_file.data(), script_file.size());
+  emscripten_worker_respond(script_file.data(), script_file.size());
 }
 
 
@@ -95,7 +95,7 @@ void script(char* data, int size)
   {
     log_debug(FMT_COMPILE("failed to download, error_code: {} msg: {}"), error_code, error_msg);
 
-    emscripten_worker_respond_provisionally(nullptr, 0);
+    emscripten_worker_respond(nullptr, 0);
   },
   {});
 }
@@ -122,7 +122,7 @@ void do_decode(int options)
   char* cdata = nullptr;
   int csize = compact(&cdata, options);
 
-  emscripten_worker_respond_provisionally(cdata, csize);
+  emscripten_worker_respond(cdata, csize);
 
   free(cdata);
 }
@@ -135,7 +135,7 @@ void decode_url(char* data, int size, int options)
   if (size < 4)
   {
     log_debug(FMT_COMPILE("decode_url: size too small: {}"), size);
-    emscripten_worker_respond_provisionally(nullptr, 0);
+    emscripten_worker_respond(nullptr, 0);
   }
 
   std::uint32_t script_sz;
@@ -144,7 +144,7 @@ void decode_url(char* data, int size, int options)
   if (script_sz + 4 >= size)
   {
     log_debug(FMT_COMPILE("decode_url: size too small for script and url: {}"), size);
-    emscripten_worker_respond_provisionally(nullptr, 0);
+    emscripten_worker_respond(nullptr, 0);
   }
 
   std::span<char> script(data + 4, script_sz);
@@ -163,7 +163,7 @@ void decode_url(char* data, int size, int options)
   {
     log_debug(FMT_COMPILE("failed to download, error_code: {} msg: {}"), error_code, error_msg);
   
-    emscripten_worker_respond_provisionally(nullptr, 0);
+    emscripten_worker_respond(nullptr, 0);
   },
   {});
 }
@@ -196,7 +196,7 @@ void decode_contents(char* data, int size, int options)
   if (size < 4)
   {
     log_debug(FMT_COMPILE("decode_contents: size too small: {}"), size);
-    emscripten_worker_respond_provisionally(nullptr, 0);
+    emscripten_worker_respond(nullptr, 0);
   }
     
   std::uint32_t script_sz;
@@ -206,7 +206,7 @@ void decode_contents(char* data, int size, int options)
   {
     log_debug(FMT_COMPILE("decode_contents: size too small for script and pdb contents: {} script_size: {}"),
                                                                                                 size, script_sz);
-    emscripten_worker_respond_provisionally(nullptr, 0);
+    emscripten_worker_respond(nullptr, 0);
   }
     
   std::span<char> script(data + 4, script_sz);
