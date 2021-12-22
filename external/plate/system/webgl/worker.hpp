@@ -28,6 +28,20 @@ class worker
 
 public:
 
+  worker() noexcept
+  {
+    ++num_users_;
+  }
+
+
+  ~worker() noexcept
+  {
+    --num_users_;
+
+    if (num_users_ == 0)
+      stop();
+  }
+
 
   static void set_path(std::string_view path) noexcept
   {
@@ -39,58 +53,25 @@ public:
   {
     if (num_workers_ == 0)
     {
-      num_workers_ = EM_ASM_INT( { return window.navigator.hardwareConcurrency; }) - 1;
+      auto num_threads = EM_ASM_INT( { return window.navigator.hardwareConcurrency; });
 
-      log_debug(FMT_COMPILE("found: {} cores"), num_workers_ + 1);
+      num_workers_ = num_threads - 1;
 
       if (num_workers_ < 1)
         num_workers_ = 1;
 
       if (num_workers_ > 6)
         num_workers_ = 6;
+
+      log_debug(FMT_COMPILE("found: {} hardware threads"), num_threads);
     }
 
     return num_workers_;
   }
 
 
-  static void start() noexcept
-  {
-    if (!workers_.empty())
-      return;
-
-    for (int i = 0; i < get_num_workers(); ++i)
-    {
-      work w;
-      w.handle = emscripten_create_worker(path_.c_str());
-
-      workers_.push_back(w);
-    }
-  }
-
-
-  static void stop() noexcept
-  {
-    static char a = 'a';
-
-    for (auto& w : workers_)
-    {
-      emscripten_call_worker(w.handle, "end_worker", &a, 0, [] (char* d, int s, void* u) -> void
-      {
-        log_debug("shutdown webworker");
-
-        auto handle = reinterpret_cast<int>(u);
-        emscripten_destroy_worker(handle);
-
-      }, reinterpret_cast<void*>(w.handle));
-    }
-
-    workers_.clear();
-  }
-
-
   template<class DATA>
-  static bool call(std::string fname, DATA& data_to_send, std::function< void (std::span<char>)>&& cb) noexcept
+  bool call(std::string fname, DATA& data_to_send, std::function< void (std::span<char>)>&& cb) noexcept
   {
     if (workers_.empty())
       start();
@@ -119,6 +100,34 @@ public:
 
 
 private:
+
+
+  static void start() noexcept
+  {
+    if (!workers_.empty())
+      return;
+
+    for (int i = 0; i < get_num_workers(); ++i)
+    { 
+      work w;
+      w.handle = emscripten_create_worker(path_.c_str());
+  
+      workers_.push_back(w);
+    }
+
+    log_debug(FMT_COMPILE("started: {} workers"), num_workers_);
+  } 
+    
+  
+  static void stop() noexcept
+  {
+    for (auto& w : workers_)
+      emscripten_destroy_worker(w.handle);
+      
+    workers_.clear();
+
+    log_debug("workers all finished");
+  }
 
 
   static void callback(char* d, int s, void* u)
@@ -184,7 +193,9 @@ private:
   inline static std::queue<work_request> queue_;
 
   inline static std::string path_;
-  inline static int num_workers_{0};
+
+  inline static int num_workers_{0};    // how many workers we have
+  inline static int num_users_{0};      // how many users/clients there are
  
 
 }; // class worker

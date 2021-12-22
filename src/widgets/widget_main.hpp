@@ -98,6 +98,23 @@ public:
   }
 
 
+  void stop() noexcept
+  {
+    if (ui_)
+      emscripten_webgl_make_context_current(ui_->ctx_);
+
+    worker_.reset();
+  }
+
+  ~widget_main() noexcept
+  {
+    if (ui_)
+      emscripten_webgl_make_context_current(ui_->ctx_);
+
+    log_debug(FMT_COMPILE("widget for {} deleted"), item_);
+  }
+
+
   std::string_view name() const noexcept
   {
     return "#main";
@@ -203,15 +220,22 @@ private:
   {
     set_loading();
 
-    worker::set_path("/animol-viewer/version/1/decoder_worker.js");
+    auto old_worker = std::move(worker_); // delete the old one (if any) after we have created a new one
+
+    worker_ = std::make_unique<worker>();
+
+    worker_->set_path("/animol-viewer/version/1/decoder_worker.js");
 
     if (local_)
     {
       // load in file and then request the worker to generate the script
 
-      ui_event::directory_load_file(item_, pdb_list_[current_entry_], [this] (std::string&& pdb)
+      ui_event::directory_load_file(item_, pdb_list_[current_entry_], [this, self{shared_from_this()}] (std::string&& pdb)
       {
-        worker::call("script_with", pdb, [this, pdb] (std::span<char> d)
+        if (!worker_)
+          return;
+
+        worker_->call("script_with", pdb, [this, self{shared_from_this()}, pdb] (std::span<char> d)
         {
           script_ = std::string(d.data(), d.size());
 
@@ -224,8 +248,11 @@ private:
           data_to_send.insert(data_to_send.end(), script_.begin(), script_.end());
           data_to_send.insert(data_to_send.end(),     pdb.begin(),     pdb.end());
 
-          worker::call(SHARED_COLORS ? "decode_contents_color_non_interleaved" : "decode_contents_color_interleaved", data_to_send,
-            [this] (std::span<char> d)
+          if (!worker_)
+            return;
+
+          worker_->call(SHARED_COLORS ? "decode_contents_color_non_interleaved" : "decode_contents_color_interleaved", data_to_send,
+            [this, self{shared_from_this()}] (std::span<char> d)
           {
             emscripten_webgl_make_context_current(ui_->ctx_);
 
@@ -240,7 +267,10 @@ private:
 
       std::string u = url_ + item_ + "/" + pdb_list_[current_entry_];
 
-      worker::call("script", u, [this] (std::span<char> d)
+      if (!worker_)
+        return;
+
+      worker_->call("script", u, [this, self{shared_from_this()}] (std::span<char> d)
       {
         script_ = std::string(d.data(), d.size());
         get_first_frame();
@@ -266,8 +296,11 @@ private:
     data_to_send.insert(data_to_send.end(), script_.begin(), script_.end());
     data_to_send.insert(data_to_send.end(),       u.begin(),       u.end());
 
-    worker::call(SHARED_COLORS ? "decode_url_color_non_interleaved" : "decode_url_color_interleaved", data_to_send,
-      [this] (std::span<char> d)
+    if (!worker_)
+      return;
+
+    worker_->call(SHARED_COLORS ? "decode_url_color_non_interleaved" : "decode_url_color_interleaved", data_to_send,
+      [this, self{shared_from_this()}] (std::span<char> d)
     {
       emscripten_webgl_make_context_current(ui_->ctx_);
 
@@ -279,6 +312,9 @@ private:
   void process_next() noexcept
   {
     if (to_load_.empty()) // nothing left to ask for
+      return;
+
+    if (!worker_)
       return;
 
     auto to_load = to_load_.front();
@@ -297,8 +333,11 @@ private:
         data_to_send.insert(data_to_send.end(), script_.begin(), script_.end());
         data_to_send.insert(data_to_send.end(),     pdb.begin(),     pdb.end());
 
-        worker::call(SHARED_COLORS ? "decode_contents_no_color" : "decode_contents_color_interleaved", data_to_send,
-          [this, entry] (std::span<char> d)
+        if (!worker_)
+          return;
+
+        worker_->call(SHARED_COLORS ? "decode_contents_no_color" : "decode_contents_color_interleaved", data_to_send,
+          [this, self{shared_from_this()}, entry] (std::span<char> d)
         {
           emscripten_webgl_make_context_current(ui_->ctx_);
           process_decoded(entry, d);
@@ -318,8 +357,8 @@ private:
       data_to_send.insert(data_to_send.end(), script_.begin(), script_.end());
       data_to_send.insert(data_to_send.end(),       u.begin(),       u.end());
 
-      worker::call(SHARED_COLORS ? "decode_url_no_color" : "decode_url_color_interleaved", data_to_send,
-        [this, entry = to_load] (std::span<char> d)
+      worker_->call(SHARED_COLORS ? "decode_url_no_color" : "decode_url_color_interleaved", data_to_send,
+        [this, self{shared_from_this()}, entry = to_load] (std::span<char> d)
       { 
         emscripten_webgl_make_context_current(ui_->ctx_);
         process_decoded(entry, d);
@@ -397,6 +436,7 @@ private:
       if (abs(v->position[1]) > max) max = abs(v->position[1]);
       if (abs(v->position[2]) > max) max = abs(v->position[2]);
     }
+
 
     // values are int16 and so range from +/- 32'768
     //
@@ -523,6 +563,9 @@ private:
       {
         if (widget_loading_)
           widget_loading_->hide();
+
+        worker_.reset(); // no more work to do
+
         return;
       }
 
@@ -620,6 +663,8 @@ private:
 
   buffer<cols> shared_vertex_colors_;        // for keeping the colors seperate from the vertices
   buffer<cols> shared_vertex_strip_colors_;
+
+  std::unique_ptr<worker> worker_; // a multi-threaded worker for performaing background tasks
 
 }; // class widget_main
 
