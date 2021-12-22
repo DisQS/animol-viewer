@@ -301,8 +301,8 @@ private:
 
     ttf_.get_atlas(atlas_type_, size_, atlas_width_, atlas_height_, atlas_depth_, image_data);
     
-    log_debug(FMT_COMPILE("Parsed font file: {} type: {} size: {} dims: {}x{}x{}"),
-                                    font_file_name_, atlas_type_, size_, atlas_width_, atlas_height_, atlas_depth_);
+    log_debug(FMT_COMPILE("Parsed font file: {} size: {} dims: {}x{}x{}"),
+                                    font_file_name_, size_, atlas_width_, atlas_height_, atlas_depth_);
 
     auto self(shared_from_this());
 
