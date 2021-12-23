@@ -675,52 +675,51 @@ public:
 
         // calc speed
 
-        int distance = 0;
+        int x_distance = 0;
 
-        while (!m.history_x.empty())
+        if (m.swipe)
         {
-          auto entry = m.history_x.back();
-
-          if (now - entry.first > 100) // only look at very recent movement
-            break;
-
-          if (now - entry.first <  40) // but not the very last one as letting go of finger sometimes registers as a movement
+          while (!m.history_x.empty())
           {
+            auto entry = m.history_x.back();
+
+            if (now - entry.first > 100) // only look at very recent movement
+              break;
+
+            x_distance += entry.second;
+
             m.history_x.pop_back();
-            continue;
-          } 
-
-          distance += entry.second;
-
-          m.history_x.pop_back();
+          }
         }
 
         m.history_x.clear();
-        m.speed.x = distance/0.11;
+        m.speed.x = x_distance/0.11;
 
-        distance = 0;
+        int y_distance = 0;
 
-        while (!m.history_y.empty())
+        if (m.swipe)
         {
-          auto entry = m.history_y.back();
-
-          if (now - entry.first > 100) // only look at very recent movement, 100ms
-            break;
-
-          if (now - entry.first <  40) // but not the very last one as letting go of finger sometimes registers as a movement
+          while (!m.history_y.empty())
           {
+            auto entry = m.history_y.back();
+
+            if (now - entry.first > 100) // only look at very recent movement, 100ms
+              break;
+
+            y_distance += entry.second;
+
             m.history_y.pop_back();
-            continue;
           }
-
-          distance += entry.second;
-
-          m.history_y.pop_back();
         }
 
         m.history_y.clear();
-        m.speed.y = distance/0.11;
+        m.speed.y = y_distance/0.11;
 
+        if (x_distance*x_distance + y_distance*y_distance < 12*12) // probably caused by a fat finger
+        {
+          m.speed.x = 0;
+          m.speed.y = 0;
+        }
 
         if (send_all_)
         {
