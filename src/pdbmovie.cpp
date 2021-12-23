@@ -4,6 +4,8 @@
 #include <emscripten/bind.h>
 #include <emscripten/fetch.h>
 
+#include "widgets/anim_projection.hpp"
+
 #include "widgets/widget_main.hpp"
 #include "widgets/widget_texture.hpp"
 
@@ -28,6 +30,8 @@ public:
 
   void set(std::string code, std::string description)
   {
+    emscripten_webgl_make_context_current(s_->ctx_);
+
     code_ = code;
     description_ = description;
 
@@ -36,9 +40,19 @@ public:
 
     w_->stop();
 
-    w_->disconnect_from_parent();
+    auto slide_out = plate::ui_event_destination::make_anim<plate::anim_projection>(
+              //s_, w_, plate::anim_projection::Options::None, 0,0,-4*w_->my_width(), plate::ui_anim::Dir::Reverse);
+              s_, w_, plate::anim_projection::Options::None, -w_->my_width(), 0, 0, plate::ui_anim::Dir::Reverse);
+
+    slide_out->set_end_cb([w(w_)]
+    {
+      w->disconnect_from_parent();
+    });
 
     run();
+
+    auto slide_in = plate::ui_event_destination::make_anim<plate::anim_projection>(
+             s_, w_, plate::anim_projection::Options::None, w_->my_width(), 0, 0, plate::ui_anim::Dir::Forward);
   }
 
 

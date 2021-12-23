@@ -100,9 +100,6 @@ public:
 
   void stop() noexcept
   {
-    if (ui_)
-      emscripten_webgl_make_context_current(ui_->ctx_);
-
     worker_.reset();
   }
 

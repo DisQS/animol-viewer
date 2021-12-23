@@ -21,7 +21,7 @@ public:
     ui_anim::init(_ui, Prop::None, parent);
 
     style_      = ui_anim::SoftSoft;
-    total_time_ = 0.1;
+    total_time_ = 0.6;
         
     if (options == Options::FixedStencil)
     {
