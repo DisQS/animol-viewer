@@ -301,13 +301,14 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
 
 void arch_resize(plate::state* s, int w, int h)
 {
-  s->viewport_width_ = w;
-  s->viewport_height_ = h;
+  s->pixel_ratio_screen_ = emscripten_get_device_pixel_ratio();
+  s->pixel_ratio_        = s->pixel_ratio_screen_;
 
-  // use float or int versions...?
-  
-  s->pixel_width_  = s->viewport_width_;
-  s->pixel_height_ = s->viewport_height_;
+  s->pixel_width_  = w;
+  s->pixel_height_ = h;
+
+  s->viewport_width_ = w / s->pixel_ratio_;
+  s->viewport_height_ = h / s->pixel_ratio_;
   
   //log_debug(FMT_COMPILE("canvas: {} viewport: {} {} pixels: {} {} ratio: {}"), s->name_, w, h, s->pixel_width_, s->pixel_height_, s->pixel_ratio_);
   

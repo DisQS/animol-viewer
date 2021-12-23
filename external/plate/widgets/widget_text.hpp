@@ -28,8 +28,6 @@ public:
 
     float font_scale = ui_->pixel_ratio_ * ui_->font_size_ * fscale_;
 
-    font_height_ = ui_->font_->get_max_height() * font_scale;
-
     upload_vertex();
 
     upload_uniform();
@@ -135,7 +133,7 @@ public:
 
     ui_event_destination::set_geometry(coords);
 
-    align_to_box();
+    upload_vertex();
     upload_uniform();
   }
 
@@ -149,6 +147,8 @@ private:
       return;
 
     float font_scale = ui_->pixel_ratio_ * ui_->font_size_ * fscale_;
+
+    font_height_ = ui_->font_->get_max_height() * font_scale;
 
     std::vector<float> vertex;
 
