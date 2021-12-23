@@ -410,7 +410,7 @@ private:
 
     // start number_of_worker_threads processing
 
-    for (int i = 0; i < worker::get_num_workers(); ++i)
+    for (int i = 0; i < worker::get_max_workers(); ++i)
       process_next();
 
     widget_object_ = ui_event_destination::make_ui<widget_object<vert, cols>>(ui_, coords_,

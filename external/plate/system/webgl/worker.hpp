@@ -49,37 +49,38 @@ public:
   }
 
 
-  static int get_num_workers() noexcept
+  static int get_max_workers() noexcept
   {
-    if (num_workers_ == 0)
+    if (max_workers_ == 0)
     {
       auto num_threads = EM_ASM_INT( { return window.navigator.hardwareConcurrency; });
 
-      num_workers_ = num_threads - 1;
+      max_workers_ = num_threads - 1;
 
-      if (num_workers_ < 1)
-        num_workers_ = 1;
+      if (max_workers_ < 1)
+        max_workers_ = 1;
 
-      if (num_workers_ > 6)
-        num_workers_ = 6;
+      if (max_workers_ > 6)
+        max_workers_ = 6;
+
+      workers_.resize(max_workers_);
 
       log_debug(FMT_COMPILE("found: {} hardware threads"), num_threads);
     }
 
-    return num_workers_;
+    return max_workers_;
   }
 
 
   template<class DATA>
   bool call(std::string fname, DATA& data_to_send, std::function< void (std::span<char>)>&& cb) noexcept
   {
-    if (workers_.empty())
-      start();
-
     if (queue_.empty())
     {
-      for (auto& w : workers_)
+      for (int i = 0; i < num_workers_; ++i)
       {
+        auto& w = workers_[i];
+
         if (!w.cb) // this decoder is free
         {
           w.cb = std::move(cb);
@@ -88,6 +89,17 @@ public:
 
           return true;
         }
+      }
+
+      if (create_worker())
+      {
+        auto& w = workers_[num_workers_-1];
+
+        w.cb = std::move(cb);
+
+        emscripten_call_worker(w.handle, fname.c_str(), data_to_send.data(), data_to_send.size(), callback, &w);
+
+        return true;
       }
     }
 
@@ -102,31 +114,30 @@ public:
 private:
 
 
-  static void start() noexcept
+  static bool create_worker() noexcept
   {
-    if (!workers_.empty())
-      return;
+    if (num_workers_ >= get_max_workers())
+      return false;
 
-    for (int i = 0; i < get_num_workers(); ++i)
-    { 
-      work w;
-      w.handle = emscripten_create_worker(path_.c_str());
+    workers_[num_workers_++].handle = emscripten_create_worker(path_.c_str());
   
-      workers_.push_back(w);
-    }
+    log_debug("started a worker");
 
-    log_debug(FMT_COMPILE("started: {} workers"), num_workers_);
+    return true;
   } 
     
   
   static void stop() noexcept
   {
-    for (auto& w : workers_)
-      emscripten_destroy_worker(w.handle);
+    if (num_workers_ > 1)
+    {
+      for (int i = 1; i < num_workers_; ++i)
+        emscripten_destroy_worker(workers_[i].handle);
       
-    workers_.clear();
+      log_debug(FMT_COMPILE("destroyed {} workers"), num_workers_ - 1);
 
-    log_debug("workers all finished");
+      num_workers_ = 1;
+    }
   }
 
 
@@ -143,8 +154,10 @@ private:
 
     if (!queue_.empty())
     {
-      for (auto& w : workers_)
+      for (int i = 0; i < num_workers_; ++i)
       {
+        auto& w = workers_[i];
+
         if (!w.cb) // this decoder is free
         {
           auto& req = queue_.front();
@@ -195,6 +208,7 @@ private:
   inline static std::string path_;
 
   inline static int num_workers_{0};    // how many workers we have
+  inline static int max_workers_{0};    // maximum number of workers we can have
   inline static int num_users_{0};      // how many users/clients there are
  
 
