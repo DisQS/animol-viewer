@@ -127,7 +127,7 @@ EM_BOOL generate_frame(double now, void *userData)
 }
 
 
-void generate_frame() // old, not used
+void generate_frame() // manually force a frame to draw
 {
   auto now = ui_event::now();
 
@@ -319,6 +319,8 @@ void arch_resize(plate::state* s, int w, int h)
   glViewport(0, 0, s->pixel_width_, s->pixel_height_);
 
   s->do_reshape();
+
+  generate_frame(); // generate a frame stright away as otherwise we get an annoying screen blank frame
 }
 
 
