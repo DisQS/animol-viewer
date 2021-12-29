@@ -29,7 +29,7 @@ public:
   void init(const std::shared_ptr<plate::state>& _ui, plate::gpu::int_box& coords,
               const std::shared_ptr<ui_event_destination>& parent, VIEWER* v) noexcept
   {
-    ui_event_destination::init(_ui, coords, Prop::Display | Prop::Input | Prop::Swipe);
+    ui_event_destination::init(_ui, coords, Prop::Display | Prop::Input | Prop::Swipe, parent);
 
     viewer_ = v;
 
@@ -193,7 +193,7 @@ public:
 
   std::string_view name() const noexcept
   {
-    return "#control";
+    return "control";
   }
 
 
@@ -204,8 +204,10 @@ private:
   {
     float spacing = coords_.height() / 9.0;
 
-    gpu::int_box coords = {{ coords_.p1.x + coords_.height(), static_cast<int>(coords_.p1.y + spacing * 4.0f) },
-                           { coords_.p2.x,                    static_cast<int>(coords_.p1.y + spacing * 5.0f) }};
+    int x_off = spacing * 2;
+
+    gpu::int_box coords = {{ coords_.p1.x + x_off, static_cast<int>(coords_.p1.y + spacing * 7.0f) },
+                           { coords_.p2.x - x_off, static_cast<int>(coords_.p1.y + spacing * 8.0f) }};
 
     widget_slider_ = ui_event_destination::make_ui<widget_box>(ui_, coords, Prop::Display,
                                                           shared_from_this(), ui_->select_color_);
@@ -221,8 +223,10 @@ private:
   {
     float spacing = coords_.height() / 9.0;
 
-    gpu::int_box coords = {{ coords_.p1.x + coords_.height(), static_cast<int>(coords_.p1.y + spacing * 4.0f) },
-                           { coords_.p2.x,                    static_cast<int>(coords_.p1.y + spacing * 5.0f) }};
+    int x_off = spacing * 2;
+
+    gpu::int_box coords = {{ coords_.p1.x + x_off, static_cast<int>(coords_.p1.y + spacing * 7.0f) },
+                           { coords_.p2.x - x_off, static_cast<int>(coords_.p1.y + spacing * 8.0f) }};
 
     widget_slider_->set_geometry(coords);
 
@@ -236,11 +240,12 @@ private:
 
     float spacing = coords_.height() / 9.0;
 
-    int start_x = coords_.p1.x + coords_.height();
+    int x_off = spacing * 2;
 
-    gpu::int_box coords = {{ start_x, static_cast<int>(coords_.p1.y + spacing   * 4.0f) },
-                           { start_x + static_cast<int>((coords_.width() - start_x) * ((current + 1) / count)),
-                             static_cast<int>(coords_.p1.y + spacing   * 5.0f) }};
+    int start_x = coords_.p1.x + x_off;
+
+    gpu::int_box coords = {{ start_x, static_cast<int>(coords_.p1.y + spacing   * 7.0f) },
+                           { start_x + static_cast<int>((coords_.width() - (x_off*2)) * ((current + 1) / count)), static_cast<int>(coords_.p1.y + spacing   * 8.0f) }};
 
     widget_slider_played_->set_geometry(coords);
   }
@@ -248,8 +253,13 @@ private:
 
   void update_frame(int x_pos) noexcept
   {
-    int start_x = coords_.p1.x + coords_.height();
-    float width_x = coords_.p2.x - start_x;
+    float spacing = coords_.height() / 9.0;
+
+    int x_off = spacing * 2;
+
+    int start_x = coords_.p1.x + x_off;
+
+    float width_x = coords_.width() - (x_off * 2);
 
     int frame = (std::max(0, x_pos - start_x) / width_x) * viewer_->get_frame().second;
 
@@ -259,7 +269,14 @@ private:
 
   void create_buttons() noexcept
   {
-    gpu::int_box button_coords = { coords_.p1, { coords_.p1.x + coords_.height(), coords_.p2.y } };
+    float top_spacing = coords_.height() / 9.0;
+
+    int sz = top_spacing * 6;
+      
+    int x_off = top_spacing * 2;
+
+    gpu::int_box button_coords = { { coords_.p1.x + x_off, coords_.p1.y },
+                                   { coords_.p1.x + x_off + sz, coords_.p1.y + sz } };
 
     float spacing = button_coords.width() / 5.0;
 
@@ -345,17 +362,15 @@ private:
 
     // make sure text displays
 
-    int start_x = coords_.p1.x + coords_.height();
-
     auto [ x_shift, y_shift ] = widget_frame_num_->get_shifts();
 
-    if (offset - x_shift < start_x)
-      offset = start_x + x_shift;
+    if (offset - x_shift < coords_.p1.x)
+      offset = coords_.p1.x + x_shift;
 
     if (offset + x_shift > coords_.p2.x)
       offset = coords_.p2.x - x_shift;
 
-    widget_frame_num_->set_offset(offset, coords_.p2.y + (10 * ui_->pixel_ratio_));
+    widget_frame_num_->set_offset(offset, coords_.p2.y + (20 * ui_->pixel_ratio_));
   }
 
 

@@ -88,7 +88,6 @@ public:
 
   void ui_mouse_button_update() noexcept
   {
-    log_debug("button pressed!");
     auto& m = ui_->mouse_metric_;
   
     if (m.click && click_cb_)

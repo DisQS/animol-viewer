@@ -486,7 +486,7 @@ public:
     {
       log_debug(FMT_COMPILE("{} anim->"), s);
       count += anim_->tree_print(depth + 1);
-      log_debug(FMT_COMPILE("{} children->"), s);
+      //log_debug(FMT_COMPILE("{} children->"), s);
     }
 
     for (auto& w : children_)

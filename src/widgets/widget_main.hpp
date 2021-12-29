@@ -113,7 +113,7 @@ public:
 
     if (auto w = widget_control_.lock(); w)
     {
-      gpu::int_box cc = { coords_.p1, { coords_.p2.x, static_cast<int>(coords_.p1.y + (40 * ui_->pixel_ratio_)) } };
+      gpu::int_box cc = { coords_.p1, { coords_.p2.x, static_cast<int>(coords_.p1.y + (control_height_ * ui_->pixel_ratio_)) } };
       w->set_geometry(cc);
     }
 
@@ -151,7 +151,7 @@ public:
   {
     float partial_frame = std::min(1.0f, (current_time_ / frame_time_));
 
-    if (frame_direction_ == 1)
+    if (frame_direction_ == 1 && current_entry_ < pdb_list_.size() - 1)
       return { current_entry_ + partial_frame, pdb_list_.size() };
     else
       return { current_entry_ - partial_frame, pdb_list_.size() };
@@ -160,8 +160,11 @@ public:
 
   inline bool set_frame(int frame) noexcept
   {
-    if (frame < 0 || frame >= store_.size())
-      return false;
+    if (frame < 0)
+      frame = 0;
+
+    if (frame >= store_.size())
+      frame = store_.size() - 1;
 
     if (store_[frame].vertex_strip.is_ready())
     {
@@ -205,6 +208,12 @@ private:
     auto h = async::request(url_ + item_ + "/movie.plan", "GET", "", [this] (std::uint32_t handle, plate::data_store&& d)
     {
       emscripten_webgl_make_context_current(ui_->ctx_);
+
+      if (d.empty())
+      {
+        log_debug("movie.plan is empty");
+        return;
+      }
 
       // read in list of pdb files
 
@@ -641,7 +650,7 @@ private:
       loading = fmt::format(FMT_COMPILE("loaded: {}/{}"), loaded_count_, pdb_list_.size());
     }
 
-    gpu::int_box c = { { coords_.p1.x, static_cast<int>(coords_.p1.y + (40 * ui_->pixel_ratio_)) },
+    gpu::int_box c = { { coords_.p1.x, static_cast<int>(coords_.p1.y + (control_height_ * ui_->pixel_ratio_)) },
                        coords_.p2 };
 
     if (widget_loading_)
@@ -709,7 +718,7 @@ private:
     }
     else
     {
-      gpu::int_box cc = { coords_.p1, { coords_.p2.x, static_cast<int>(coords_.p1.y + (40 * ui_->pixel_ratio_)) } };
+      gpu::int_box cc = { coords_.p1, { coords_.p2.x, static_cast<int>(coords_.p1.y + (control_height_ * ui_->pixel_ratio_)) } };
       widget_control_ = ui_event_destination::make_ui<widget_control<widget_main>>(ui_, cc, shared_from_this(), this);
     }
   }
@@ -759,6 +768,8 @@ private:
   buffer<cols> shared_vertex_strip_colors_;
 
   std::unique_ptr<worker> worker_; // a multi-threaded worker for performaing background tasks
+
+  constexpr static int control_height_ = 50;
 
 }; // class widget_main
 

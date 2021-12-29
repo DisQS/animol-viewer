@@ -161,6 +161,8 @@ public:
   std::uint32_t        size() noexcept { return sz; };
   std::span<std::byte> span() noexcept { return { data(), size() }; };
 
+  bool empty() const noexcept { return sz == 0; };
+
 
   inline void clear()
   {
