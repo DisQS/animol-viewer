@@ -85,6 +85,13 @@ public:
 
   void reshape() noexcept
   { 
+    // zoom object if there is more or less space available
+
+    auto cur_min_dim = static_cast<double>(std::min(my_width(), my_height()));
+    auto new_min_dim = static_cast<double>(std::min(ui_->pixel_width_, ui_->pixel_height_));
+
+    double z = new_min_dim / cur_min_dim;
+
     coords_ = { { 0, 0 }, { ui_->pixel_width_, ui_->pixel_height_ } };
 
     set_title();
@@ -94,7 +101,10 @@ public:
       set_load_button();
 
     if (widget_object_)
+    {
       widget_object_->set_geometry(coords_);
+      widget_object_->zoom(z);
+    }
   }
 
 

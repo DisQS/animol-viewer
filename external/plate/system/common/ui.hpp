@@ -25,7 +25,7 @@
 
 namespace plate {
 
-//class shader_basic;
+class shader_basic;
 //class shader_compute_template;
 class shader_object;
 //class shader_object_instanced;
@@ -761,10 +761,8 @@ public:
 
             double_touch_metric_.dist = dist;
 
-            auto w = top_widget_->tree_find_input(x, y, false);
-
-            if (w && double_touch_metric_.delta != std::numeric_limits<double>::infinity())
-              w->ui_zoom_update();
+            if (m.current && double_touch_metric_.delta != std::numeric_limits<double>::infinity())
+              m.current->ui_zoom_update();
 
             n.multi = true;
             m.multi = true;
@@ -1101,7 +1099,7 @@ public:
 
   int ctx_ = 0;
 
-//  shader_basic*                  shader_basic_                  = nullptr;
+  shader_basic*                  shader_basic_                  = nullptr;
 //  shader_compute_template*       shader_compute_template_       = nullptr;
   shader_object*                 shader_object_                 = nullptr;
 //  shader_object_instanced*       shader_object_instanced_       = nullptr;

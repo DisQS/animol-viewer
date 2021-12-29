@@ -24,20 +24,54 @@
 
 
 namespace plate {
+
+extern void arch_resize(plate::state* s);
+extern void arch_resize(plate::state* s, int w, int h);
+
 namespace ui_event {
 
 // public
 
 
 bool initialised_{false};
-std::vector<std::pair<plate::state*, std::string>> states_;
 
-// private vars
 
-std::set<int> touch_avail_{0,1,2,3,4,5,6,7,8,9};
+struct per_state
+{
+  per_state(plate::state* s, std::string name) noexcept :
+    s(s),
+    name(name)
+  {
+  }
 
-std::map<int, int> touch_mapping_; // maps touch identifiers to the touch number...
-                                   // ie.. touch x comes in first that is number 0...
+  plate::state* s;
+  std::string   name;
+
+  std::set<int>      touch_avail{0,1,2,3,4,5,6,7,8,9};
+  std::map<int, int> touch_mapping; // maps touch identifiers to the touch number...
+                                    // ie.. touch x comes in first that is number 0...
+};
+
+std::vector<per_state> states_;
+
+per_state* get_state(std::string_view name) noexcept
+{
+  for (auto& st : states_)
+    if (st.name == name)
+      return &st;
+
+  return nullptr;
+}
+
+per_state* get_state(plate::state* s) noexcept
+{
+  for (auto& st : states_)
+    if (st.s == s)
+      return &st;
+
+  return nullptr;
+}
+
 
 EM_JS(int, js_get_device_type, (),
 {
@@ -351,8 +385,8 @@ void stop()
 {
   auto ss = states_;
 
-  for (auto& [s, name] : ss)
-    rm_dest(s, name);
+  for (auto& st : ss)
+    rm_dest(st.s, st.name);
 
   // event: window_size
 
@@ -367,31 +401,23 @@ void stop()
 void init();
 
 
-//void start(std::string c)
-//{
-//  canvas_ = c;
-//
-//  emscripten_run_script("document.getElementById('canvas').focus()");
-//
-//  init();
-//};
-
-
-void to_fullscreen()
+void to_fullscreen(plate::state* s)
 {
-/*
   EmscriptenFullscreenChangeEvent e;
   emscripten_get_fullscreen_status(&e);
 
   if (e.isFullscreen == EM_TRUE)
   {
     emscripten_exit_fullscreen();
+    return;
   }
-  else
-  {
-    emscripten_request_fullscreen(canvas_.c_str(), true);
-  }
-  */
+
+  EmscriptenFullscreenStrategy strategy{};
+
+  strategy.scaleMode = EMSCRIPTEN_FULLSCREEN_SCALE_STRETCH;
+  strategy.filteringMode = EMSCRIPTEN_FULLSCREEN_FILTERING_DEFAULT;
+
+  emscripten_request_fullscreen_strategy(s->name_.c_str(), false, &strategy);
 };
 
 
@@ -593,6 +619,11 @@ EM_BOOL f_touch(int event_type, const EmscriptenTouchEvent *e, void *user_data)
 
   state* s = reinterpret_cast<plate::state*>(user_data);
 
+  auto st = get_state(s);
+
+  if (!st)
+    return EM_FALSE;
+
   emscripten_webgl_make_context_current(s->ctx_);
 
   for (int i = 0; i < e->numTouches; i++)
@@ -607,26 +638,29 @@ EM_BOOL f_touch(int event_type, const EmscriptenTouchEvent *e, void *user_data)
 
     int id;
 
-    if (auto it = touch_mapping_.find(t.identifier); it != touch_mapping_.end())
+    if (auto it = st->touch_mapping.find(t.identifier); it != st->touch_mapping.end())
       id = it->second;
     else
     {
-      auto it2 = touch_avail_.begin();
+      if (event_type != EMSCRIPTEN_EVENT_TOUCHSTART) // not our touch
+        continue;
+
+      auto it2 = st->touch_avail.begin();
       id = *it2;
-      touch_mapping_[t.identifier] = id;
-      touch_avail_.erase(it2);
+      st->touch_mapping[t.identifier] = id;
+      st->touch_avail.erase(it2);
     }
 
     if (event_type == EMSCRIPTEN_EVENT_TOUCHEND)
     {
-      touch_avail_.insert(id);
-      touch_mapping_.erase(t.identifier);
+      st->touch_avail.insert(id);
+      st->touch_mapping.erase(t.identifier);
     }
 
     if (event_type == EMSCRIPTEN_EVENT_TOUCHCANCEL)
     {
-      touch_avail_.insert(id);
-      touch_mapping_.erase(t.identifier);
+      st->touch_avail.insert(id);
+      st->touch_mapping.erase(t.identifier);
     }
 
     switch (event_type)
@@ -640,6 +674,33 @@ EM_BOOL f_touch(int event_type, const EmscriptenTouchEvent *e, void *user_data)
 
   return EM_TRUE;
 }
+
+
+EM_BOOL f_fullscreen(int event_type, const EmscriptenFullscreenChangeEvent *e, void *user_data)
+{
+  log_debug(FMT_COMPILE("got f_fullscreen: {} nodeName: {} id: {} screen: {}x{} element: {}x{}"),
+             e->isFullscreen, e->nodeName, e->id, e->screenWidth, e->screenHeight, e->elementWidth, e->elementHeight);
+
+  if (!user_data)
+    return EM_FALSE;
+    
+  state* s = reinterpret_cast<plate::state*>(user_data);
+    
+  emscripten_webgl_make_context_current(s->ctx_);
+
+  auto ratio = emscripten_get_device_pixel_ratio();
+
+  if (e->isFullscreen == EM_TRUE)
+    arch_resize(s, e->elementWidth * ratio, e->elementHeight * ratio);
+  else // delay the resize by 1 frame as the underlying os hasn't quite finished
+    s->add_to_command_queue([s] ()
+    {
+      arch_resize(s);
+    });
+
+  return EM_TRUE;
+}
+
 
 
 void init()
@@ -706,6 +767,10 @@ void add_dest(S* s, std::string canvas)
   emscripten_set_touchend_callback   (canvas.c_str(), s, EM_TRUE, f_touch);
   emscripten_set_touchmove_callback  (canvas.c_str(), s, EM_TRUE, f_touch);
   emscripten_set_touchcancel_callback(canvas.c_str(), s, EM_TRUE, f_touch);
+
+  // event: fullscreen
+
+  emscripten_set_fullscreenchange_callback(canvas.c_str(), s, EM_TRUE, f_fullscreen);
 }
 
 
@@ -713,7 +778,7 @@ template<class S> // plate::state
 void rm_dest(S* s, std::string canvas)
 {
   for (std::size_t i = 0; i < states_.size(); ++i)
-    if (states_[i].first == s)
+    if (states_[i].s == s)
       states_.erase(states_.begin() + i);
   
   // use javascript to unset pointer capture
@@ -760,14 +825,14 @@ void rm_dest(S* s, std::string canvas)
   emscripten_set_touchend_callback   (canvas.c_str(), nullptr, EM_TRUE, nullptr);
   emscripten_set_touchmove_callback  (canvas.c_str(), nullptr, EM_TRUE, nullptr);
   emscripten_set_touchcancel_callback(canvas.c_str(), nullptr, EM_TRUE, nullptr);
+
+  // event: fullscreen
+
+  emscripten_set_fullscreenchange_callback(canvas.c_str(), nullptr, EM_TRUE, nullptr);
 }
 
 
 }; // namespace ui_event
-
-extern void arch_resize(plate::state* s);
-extern void arch_resize(plate::state* s, int w, int h);
-
 }; // namespace plate
 
 
@@ -776,10 +841,10 @@ void f_fragment_change(std::string name)
 {
   using namespace plate;
 
-  for (auto& [s, n] : ui_event::states_)
+  for (auto& st : ui_event::states_)
   {
-    emscripten_webgl_make_context_current(s->ctx_);
-    s->fragment_change(name);
+    emscripten_webgl_make_context_current(st.s->ctx_);
+    st.s->fragment_change(name);
   }
 }
 
@@ -788,17 +853,23 @@ void f_canvas_resize_exact(std::string name, int width, int height)
 {
   using namespace plate;
 
+  // ignore if we're in fullscreen mode.. why does this get called anyway?
+
+  EmscriptenFullscreenChangeEvent e;
+  emscripten_get_fullscreen_status(&e);
+
+  if (e.isFullscreen == EM_TRUE)
+    return;
+
   auto name_s = "#" + name.substr(0, name.length()-3);
 
   //log_debug(FMT_COMPILE("Got resize_exact for: {} {}"), name, name_s);
 
-  for (auto& [s, n] : ui_event::states_)
-    if (name_s == n)
-    {
-      emscripten_webgl_make_context_current(s->ctx_);
-      arch_resize(s, width, height);
-      break;
-    }
+  if (auto st = ui_event::get_state(name_s); st)
+  {
+    emscripten_webgl_make_context_current(st->s->ctx_);
+    arch_resize(st->s, width, height);
+  }
 }
 
 
@@ -810,13 +881,11 @@ void f_canvas_resize(std::string name)
 
   //log_debug(FMT_COMPILE("Got resize for: {} {}"), name, name_s);
 
-  for (auto& [s, n] : ui_event::states_)
-    if (name_s == n)
-    {
-      emscripten_webgl_make_context_current(s->ctx_);
-      arch_resize(s);
-      break;
-    }
+  if (auto st = ui_event::get_state(name_s); st)
+  {
+    emscripten_webgl_make_context_current(st->s->ctx_);
+    arch_resize(st->s);
+  }
 }
 
 
@@ -826,16 +895,16 @@ void f_color_mode_change(int mode)
 
   log_debug(FMT_COMPILE("Got c++ color mode change to: {}"), mode);
 
-  for (auto& [s, n] : ui_event::states_)
-    s->set_darkmode(mode == 0 ? false : true);
+  for (auto& st : ui_event::states_)
+    st.s->set_darkmode(mode == 0 ? false : true);
 }
 
 void f_paste(std::string t)
 {
   using namespace plate;
 
-  for (auto& [s, n] : ui_event::states_)
-    s->incoming_paste_event(t);
+  for (auto& st : ui_event::states_)
+    st.s->incoming_paste_event(t);
 }
 
 void f_directory_show_picker_cb(std::uint32_t cb, std::string dir_name, std::string filelist)

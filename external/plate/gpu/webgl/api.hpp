@@ -13,7 +13,7 @@
 #include "../../system/webgl/ui_event_impl.hpp"
 #include "../../system/common/ui_event_destination.hpp"
 
-//#include "shaders/basic/shader.hpp"
+#include "shaders/basic/shader.hpp"
 #include "shaders/texture/shader.hpp"
 //#include "shaders/compute_template/shader.hpp"
 //#include "shaders/text/shader.hpp"
@@ -225,7 +225,7 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
 
   emscripten_set_beforeunload_callback(nullptr, quit);
 
-//  s->shader_basic_                  = new shader_basic(true);
+  s->shader_basic_                  = new shader_basic(true);
   s->shader_texture_                = new shader_texture(true);
 //  s->shader_compute_template_       = new shader_compute_template(true);
 //  s->shader_text_                   = new shader_text(true);
@@ -236,7 +236,7 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
 //  s->shader_circle_                 = new shader_circle(true, s->version_);
   s->shader_rounded_box_            = new shader_rounded_box(true, s->version_);
 
-//  s->shader_basic_->link();
+  s->shader_basic_->link();
   s->shader_texture_->link();
 //  s->shader_compute_template_->link();
 //  s->shader_text_->link();
@@ -247,7 +247,7 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
 //  s->shader_circle_->link();
   s->shader_rounded_box_->link();
 
-//  s->shader_basic_->check();
+  s->shader_basic_->check();
   s->shader_texture_->check();
 //  s->shader_compute_template_->check();
 //  s->shader_text_->check();
@@ -269,9 +269,8 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
 
   s->set_name(canvas_name);
 
-  //if (windows_.size() == 1) emscripten_set_main_loop(generate_frame, -1, 0);
-  if (windows_.size() == 1) emscripten_request_animation_frame_loop(generate_frame, nullptr);
-
+  if (windows_.size() == 1)
+    emscripten_request_animation_frame_loop(generate_frame, nullptr);
 
   std::string add_observer = "Plate_RO.observe(document.querySelector('" + canvas_name + "div'))";
   emscripten_run_script(add_observer.c_str());
@@ -314,7 +313,7 @@ void arch_resize(plate::state* s, int w, int h)
   
   emscripten_set_canvas_element_size(s->name_.c_str(), s->pixel_width_, s->pixel_height_);
   js_set_dims((s->pixel_width_ / s->pixel_ratio_), (s->pixel_height_ / s->pixel_ratio_),
-                                                               s->name_.data()+1, s->name_.length()-1);
+                                                           s->name_.data()+1, s->name_.length()-1);
 
   s->projection_.set(s->pixel_width_, s->pixel_height_);
   glViewport(0, 0, s->pixel_width_, s->pixel_height_);
@@ -349,7 +348,6 @@ void arch_resize(plate::state* s)
                                                     s->name_.data()+1, s->name_.length()-1);
 
   s->projection_.set(s->pixel_width_, s->pixel_height_);
-  //glViewport(0, 0, gpu::viewport_width_, gpu::viewport_height_);
   glViewport(0, 0, s->pixel_width_, s->pixel_height_);
 
   s->do_reshape();

@@ -138,7 +138,7 @@ namespace gpu {
 
     bool operator==(const int_box&   other) const { return p1 == other.p1 && p2 == other.p2; }
 
-    int_box zoom(float z, int_point about) noexcept
+    int_box zoom(float z, const int_point about) const noexcept
     {
       // shift to 0,0
       // apply zoom
@@ -159,6 +159,8 @@ namespace gpu {
 
     int width()  const noexcept { return p2.x - p1.x; }
     int height() const noexcept { return p2.y - p1.y; }
+
+    int_point middle() const noexcept { return {p1.x + width()/2, p1.y + height()/2}; }
 
     void shift(int x, int y) noexcept
     {

@@ -157,9 +157,7 @@ public:
 
   bool ui_zoom_update() noexcept
 	{
-    scale_ *= ui_->double_touch_metric_.delta;
-
-    upload_uniform();
+    zoom(ui_->double_touch_metric_.delta);
 
 		return true;
 	}
@@ -167,13 +165,19 @@ public:
   bool ui_scroll(double x_delta, double y_delta) noexcept // zoom
   {
     if (y_delta < 0)
-      scale_ *= 1.05;
+      zoom(1.05);
     else
-      scale_ /= 1.05;
-
-    upload_uniform();
+      zoom(1.0 / 1.05);
 
     return true;
+  }
+
+
+  inline void zoom(double z) noexcept
+  {
+    scale_ *= z;
+
+    upload_uniform();
   }
 
 
