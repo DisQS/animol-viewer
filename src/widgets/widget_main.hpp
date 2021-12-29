@@ -11,6 +11,8 @@
 #include "widgets/widget_object.hpp"
 #include "widgets/widget_text.hpp"
 
+#include "widget_control.hpp"
+
 
 namespace pdbmovie {
 
@@ -74,6 +76,9 @@ public:
     if (current_entry_ < 0)
       return;
 
+    if (!playing_ || pdb_list_.size() <= 1)
+      return;
+
     current_time_ += ui_->frame_diff_;
 
     if (current_time_ >= frame_time_)
@@ -105,6 +110,14 @@ public:
       widget_object_->set_geometry(coords_);
       widget_object_->zoom(z);
     }
+
+    if (auto w = widget_control_.lock(); w)
+    {
+      gpu::int_box cc = { coords_.p1, { coords_.p2.x, static_cast<int>(coords_.p1.y + (40 * ui_->pixel_ratio_)) } };
+      w->set_geometry(cc);
+    }
+
+    ui_->do_draw();
   }
 
 
@@ -120,6 +133,50 @@ public:
 
     log_debug(FMT_COMPILE("widget for {} deleted"), item_);
   }
+
+
+  inline bool is_playing() const noexcept
+  {
+    return playing_;
+  }
+
+
+  inline void set_playing(bool playing) noexcept
+  {
+    playing_ = playing;
+  }
+
+
+  std::pair<float, int> get_frame() const noexcept
+  {
+    float partial_frame = std::min(1.0f, (current_time_ / frame_time_));
+
+    if (frame_direction_ == 1)
+      return { current_entry_ + partial_frame, pdb_list_.size() };
+    else
+      return { current_entry_ - partial_frame, pdb_list_.size() };
+  }
+
+
+  inline bool set_frame(int frame) noexcept
+  {
+    if (frame < 0 || frame >= store_.size())
+      return false;
+
+    if (store_[frame].vertex_strip.is_ready())
+    {
+      current_time_ = 0;
+      current_entry_ = frame;
+  
+      widget_object_->set_model(&(store_[current_entry_].vertex),       &shared_vertex_colors_);
+      widget_object_->add_model(&(store_[current_entry_].vertex_strip), &shared_vertex_strip_colors_);
+
+      return true;
+    }
+
+    return false;
+  }
+
 
 
   std::string_view name() const noexcept
@@ -429,6 +486,11 @@ private:
     widget_object_->set_model(&store_[current_entry_].vertex,       &shared_vertex_colors_);
     widget_object_->add_model(&store_[current_entry_].vertex_strip, &shared_vertex_strip_colors_);
 
+    widget_object_->set_user_interacted_cb([this] ()
+    {
+      create_control();
+    });
+
     // loop through data to find protein width
 
     p = reinterpret_cast<std::byte*>(d.data()) + sizeof(compact_header);
@@ -579,15 +641,20 @@ private:
       loading = fmt::format(FMT_COMPILE("loaded: {}/{}"), loaded_count_, pdb_list_.size());
     }
 
+    gpu::int_box c = { { coords_.p1.x, static_cast<int>(coords_.p1.y + (40 * ui_->pixel_ratio_)) },
+                       coords_.p2 };
+
     if (widget_loading_)
     {
       widget_loading_->show();
-      widget_loading_->set_geometry(coords_);
+      widget_loading_->set_geometry(c);
       widget_loading_->set_text(loading);
     }
     else
-      widget_loading_ = ui_event_destination::make_ui<widget_text>(ui_, coords_, Prop::Display, shared_from_this(), loading,
+    {
+      widget_loading_ = ui_event_destination::make_ui<widget_text>(ui_, c, Prop::Display, shared_from_this(), loading,
                                   gpu::align::BOTTOM | gpu::align::OUTSIDE, ui_->txt_color_, gpu::rotation{0.0f,0.0f,0.0f}, 0.8f);
+    }
   }
 
 
@@ -629,6 +696,23 @@ private:
       });
     }
   }
+
+
+  void create_control()
+  {
+    if (pdb_list_.size() <= 1)
+      return;
+
+    if (auto w = widget_control_.lock(); w)
+    {
+      w->user_interacted();
+    }
+    else
+    {
+      gpu::int_box cc = { coords_.p1, { coords_.p2.x, static_cast<int>(coords_.p1.y + (40 * ui_->pixel_ratio_)) } };
+      widget_control_ = ui_event_destination::make_ui<widget_control<widget_main>>(ui_, cc, shared_from_this(), this);
+    }
+  }
   
 
   std::shared_ptr<plate::widget_text>         widget_title_;
@@ -639,6 +723,9 @@ private:
 
   std::shared_ptr<plate::widget_object<vert, cols>> widget_object_;
 
+  std::weak_ptr<widget_control<widget_main>> widget_control_;
+
+  bool playing_{true};
 
   struct frame
   {

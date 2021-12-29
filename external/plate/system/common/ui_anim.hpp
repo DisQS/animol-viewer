@@ -114,6 +114,9 @@ public:
   }
 
 
+  virtual std::string_view name() const noexcept = 0;
+
+
 protected:
 
 

@@ -164,8 +164,8 @@ public:
       if (touch_metric_[i].current == t)
         touch_metric_[i].current = nullptr;
 
-    //RM:if (double_touch_metric_.current == t)
-      //double_touch_metric_.current = nullptr;
+    //RM:if (multi_touch_metric_.current == t)
+      //multi_touch_metric_.current = nullptr;
   };
 
 
@@ -616,6 +616,7 @@ public:
         m.click        = false;
         m.double_click = false;
         m.swipe        = false;
+        m.multi        = false;
 
         m.history_x.clear();
         m.history_y.clear();
@@ -639,16 +640,29 @@ public:
         auto w = top_widget_->tree_find_input(x, y, false);
 
         if (w)
+        {
           if (w->ui_touch_update(id))
-          {
             m.current = w;
-            return;
+
+          // has this formed a multi touch?
+
+          for (auto& n : touch_metric_)
+          {
+            if (n.st != 0 && n.id != m.id && n.current == m.current)
+            {
+              n.multi = true;
+              m.multi = true;
+
+              multi_touch_metric_.dist = 0;
+            }
           }
+        }
 
         break;
       }
       case ui_event::TouchEventUp:
       {
+      /*
         if (m.multi)
         {
           int touch_count = 0;
@@ -664,11 +678,12 @@ public:
             for (auto& n : touch_metric_)
               n.st = 0;
 
-            double_touch_metric_.dist = 0;
+            multi_touch_metric_.dist = 0;
 
             return;
           }
         }
+        */
 
         m.click = !m.swipe && ((now - m.down_start) <= 200);
         m.double_click = !m.swipe && ((now - m.prev_down_start) <= 400);
@@ -749,25 +764,26 @@ public:
         m.pos.y = y;
 
         //multitouch
-        for (auto& n : touch_metric_)
+
+        if (m.multi)
         {
-          if (n.st != 0 && n.id != m.id)
+          for (auto& n : touch_metric_)
           {
-            int xdiff = m.pos.x - n.pos.x;
-            int ydiff = m.pos.y - n.pos.y;
+            if (n.st != 0 && n.id != m.id && n.current == m.current)
+            {
+              int xdiff = m.pos.x - n.pos.x;
+              int ydiff = m.pos.y - n.pos.y;
 
-            float dist = std::sqrt(static_cast<double>(xdiff*xdiff + ydiff*ydiff));
-            double_touch_metric_.delta = dist / double_touch_metric_.dist;
+              float dist = std::sqrt(static_cast<double>(xdiff*xdiff + ydiff*ydiff));
 
-            double_touch_metric_.dist = dist;
+              multi_touch_metric_.delta = dist / multi_touch_metric_.dist;
+              multi_touch_metric_.dist  = dist;
 
-            if (m.current && double_touch_metric_.delta != std::numeric_limits<double>::infinity())
-              m.current->ui_zoom_update();
+              if (m.current && multi_touch_metric_.delta != std::numeric_limits<double>::infinity())
+                m.current->ui_zoom_update();
 
-            n.multi = true;
-            m.multi = true;
-
-            return;
+              return;
+            }
           }
         }
 
@@ -995,7 +1011,7 @@ public:
     metric_data() {};
   };
 
-  struct double_touch_metric_data
+  struct multi_touch_metric_data
   {
     double dist{0};
     double delta{0};
@@ -1034,7 +1050,7 @@ public:
   metric_data mouse_metric_;
   metric_data wheel_metric_;
 
-  double_touch_metric_data double_touch_metric_; 
+  multi_touch_metric_data multi_touch_metric_; 
 
   // window
 

@@ -429,6 +429,8 @@ EM_BOOL f_context_lost(int event_type, const void* reserved, void* user_data)
   if (!user_data)
     return EM_FALSE;
 
+  state* s = reinterpret_cast<plate::state*>(user_data);
+
   log_debug(FMT_COMPILE("Got context lost type: {}"), event_type);
 
   return EM_TRUE;

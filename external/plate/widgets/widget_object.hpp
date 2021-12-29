@@ -89,6 +89,12 @@ public:
   }
 
 
+  void set_user_interacted_cb(std::function<void ()> cb) noexcept
+  {
+    interaction_cb_ = std::move(cb);
+  }
+
+
   std::string_view name() const noexcept
   {
     return "#object";
@@ -101,6 +107,9 @@ public:
 
     if (m.swipe)
       move(m);
+
+    if (interaction_cb_)
+      interaction_cb_();
 
     return true;
   }
@@ -123,19 +132,26 @@ public:
       x_speed_ = m.speed.x;
       y_speed_ = m.speed.y;
     }
+
+    if (interaction_cb_)
+      interaction_cb_();
   }
 
 
   bool ui_touch_update(int id) noexcept
   {
-    if (id != 0)
+    if (mouse_down_ && touch_id_ != id) // can only touch with one finger
       return true;
+
+    if (interaction_cb_)
+      interaction_cb_();
 
     auto& m = ui_->touch_metric_[id];
 
     if (m.st == ui_event::TouchEventDown)
     {
       mouse_down_ = true;
+      touch_id_   = id;
       return true;
     }
 
@@ -157,7 +173,7 @@ public:
 
   bool ui_zoom_update() noexcept
 	{
-    zoom(ui_->double_touch_metric_.delta);
+    zoom(ui_->multi_touch_metric_.delta);
 
 		return true;
 	}
@@ -283,6 +299,7 @@ private:
   std::vector<model> model_ptrs_;
 
   bool mouse_down_{false};
+  int  touch_id_;
 
   float scale_{1.0f};
 
@@ -292,6 +309,8 @@ private:
   float y_speed_{0};
 
   constexpr static float sensitivity_ = 2.0 * M_PI * 30.0; // higher => more movement from mouse/touch needed
+
+  std::function<void ()> interaction_cb_;
 
 }; // widget_object
 

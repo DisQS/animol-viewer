@@ -22,6 +22,11 @@ public:
     gpu::float_vec2 scale;
   };
 
+  struct basic_vertex // a basic struct for sending through vertices
+  {
+    std::array<float, 4> position;
+  };
+
   shader_basic()
   {
     if (auto r = build_program({reinterpret_cast<const char*>(basic_gl_vert), basic_gl_vert_len},

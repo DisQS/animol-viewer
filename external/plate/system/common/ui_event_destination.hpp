@@ -169,15 +169,15 @@ public:
   }
 
 
-  void hide()
+  inline void hide() noexcept
 	{
-    property_ |= Prop::Hidden;
+    set_hidden();
 	}
 
 
-  void show()
+  inline void show() noexcept
   {
-    property_ &= ~Prop::Hidden;
+    unset_hidden();
   }
 
 
@@ -279,9 +279,15 @@ public:
   }
 
 
-  void clear_anim() noexcept
+  inline void clear_anim() noexcept
   {
     anim_.reset();
+  }
+
+
+  inline bool have_anim() const noexcept
+  {
+    return anim_.get() != nullptr;
   }
 
 
@@ -389,6 +395,9 @@ public:
 
   inline void set_passive()             noexcept { property_ |=  Prop::Passive;  }
   inline void unset_passive()           noexcept { property_ &= ~Prop::Passive;  }
+
+  inline void set_input()               noexcept { property_ |=  Prop::Input;  }
+  inline void unset_input()             noexcept { property_ &= ~Prop::Input;  }
 
 
   virtual bool message(Msg m) noexcept

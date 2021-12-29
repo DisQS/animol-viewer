@@ -138,6 +138,12 @@ public:
   }
 
 
+  inline std::pair<int, int> get_shifts() const noexcept
+  {
+    return { x_shift_, y_shift_ };
+  }
+
+
 private:
 
     

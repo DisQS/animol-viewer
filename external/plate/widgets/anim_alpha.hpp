@@ -18,7 +18,7 @@ public:
     ui_anim::init(_ui, Prop::None, parent);
 
     style_      = ui_anim::SoftSoft;
-    total_time_ = 0.25;
+    total_time_ = 0.4;
 
     widget_alpha_ = make_anim<widget_alpha>(ui_, shared_from_this());
 

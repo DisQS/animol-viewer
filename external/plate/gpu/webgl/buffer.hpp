@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdlib>
+#include <span>
 
 #include <GLES3/gl3.h>
 
@@ -97,6 +98,12 @@ public:
   bool upload(const std::byte* data, int count, int mode = GL_TRIANGLES) noexcept
   {
     return upload(reinterpret_cast<const T*>(data), count, mode);
+  }
+
+
+  inline bool upload(std::span<T> data, int mode = GL_TRIANGLES) noexcept
+  {
+    return upload(data.data(), data.size(), mode);
   }
 
 
