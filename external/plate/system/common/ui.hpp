@@ -129,14 +129,41 @@ public:
   }
 
 
+  void set_pixel_ratio(double r) noexcept
+  {
+    prev_pixel_ratio_ = pixel_ratio_;
+    pixel_ratio_ = r;
+  }
+
+
+  inline bool pixel_ratio_changed() const noexcept
+  {
+    return pixel_ratio_ != prev_pixel_ratio_;
+  }
+
+
   void set_font_size(float s) noexcept
   {
+    prev_font_size_ = font_size_;
     font_size_ = s;
   }
+
 
   inline float get_font_size() const noexcept
   {
     return font_size_;
+  }
+
+
+  inline bool font_size_changed() const noexcept
+  {
+    return font_size_ != prev_font_size_;
+  }
+
+
+  inline bool any_size_changed() const noexcept
+  {
+    return pixel_ratio_changed() || font_size_changed();
   }
 
 
@@ -290,26 +317,38 @@ public:
   }
 
 
-  std::string get_tz()
+  std::string get_tz() noexcept
   {
     return ui_event::get_tz();
   }
 
 
-  void do_reshape()
+  void do_reshape() noexcept
   {
     if (top_widget_)
       top_widget_->tree_reshape();
+
+    do_draw();
   }
 
 
-  void incoming_focus(bool focus)
+  void incoming_focus(bool focus) noexcept
   {
-    //log_debug(FMT_COMPILE("Got focus: {} for: {}"), focus, name_);
+    is_focused_ = focus;
   }
 
 
-  void incoming_mouse_over(bool over)
+  inline void set_focus() noexcept
+  {
+    if (!is_focused_)
+    {
+      auto n = name_.substr(1);
+      ui_event::set_focus(n);
+    }
+  }
+
+
+  void incoming_mouse_over(bool over) noexcept
   {
     //log_debug(FMT_COMPILE("Got mouse_over: {} for: {}"), over, name_);
   }
@@ -319,7 +358,7 @@ public:
   // whether an event has changed, and any force detail
 
   void incoming_key_event(ui_event::KeyEvent event, std::string_view utf8, std::string_view code_utf8,
-                                                                                      ui_event::KeyMod mod)
+                                                                                      ui_event::KeyMod mod) noexcept
   {
     if (event == ui_event::KeyEvent::KeyEventDown && code_utf8 == "Escape")
       top_widget_->tree_print();
@@ -333,7 +372,7 @@ public:
   };
 
 
-  void incoming_paste_event(std::string_view s)
+  void incoming_paste_event(std::string_view s) noexcept
   {
     if (send_keyboard_events_)
     {
@@ -344,7 +383,7 @@ public:
   };
 
 
-  void incoming_virtual_keyboard_quit()
+  void incoming_virtual_keyboard_quit() noexcept
   {
     if (send_keyboard_events_)
     {
@@ -475,6 +514,8 @@ public:
   
     if (event == ui_event::MouseButtonEventDown)
     {
+      set_focus();
+
       if (mouse_metric_.id == 0) // no other mouse buttons are currently down
       {
         mouse_metric_.current = nullptr;
@@ -592,7 +633,7 @@ public:
   };
 
 
-  void incoming_touch(ui_event::TouchEvent event, int id, int x, int y)
+  void incoming_touch(ui_event::TouchEvent event, int id, int x, int y) noexcept
   {
     do_draw();
 
@@ -608,6 +649,8 @@ public:
     {
       case ui_event::TouchEventDown:
       {
+        set_focus();
+
         m.id = id;
 
         m.pos.x = x;
@@ -859,7 +902,7 @@ public:
   };
 
 
-  bool incoming_scroll_wheel(double x_delta, double y_delta)
+  bool incoming_scroll_wheel(double x_delta, double y_delta) noexcept
   {
     do_draw();
 
@@ -879,11 +922,11 @@ public:
 
   // window interfaces
 
-  void set_x_offset(float x_offset) { x_offset_ = x_offset; }
-  void set_y_offset(float y_offset) { y_offset_ = y_offset; }
+  inline void set_x_offset(float x_offset) noexcept { x_offset_ = x_offset; }
+  inline void set_y_offset(float y_offset) noexcept { y_offset_ = y_offset; }
 
-  float get_x_offset() { return x_offset_; }
-  float get_y_offset() { return y_offset_; }
+  inline float get_x_offset() const noexcept { return x_offset_; }
+  inline float get_y_offset() const noexcept { return y_offset_; }
 
 
   void set_frame_time(const double t) noexcept
@@ -905,13 +948,13 @@ public:
   }
 
 
-  inline void do_draw()
+  inline void do_draw() noexcept
   {
     to_draw_ = true;
   }
 
 
-  void redo_draw()
+  void redo_draw() noexcept
   {
     redo_draw_[0] = true;
     redo_draw_[1] = true;
@@ -920,7 +963,7 @@ public:
   }
 
 
-  void add_to_command_queue(std::function<void ()> f)
+  void add_to_command_queue(std::function<void ()> f) noexcept
   {
     do_draw();
 
@@ -929,7 +972,7 @@ public:
     command_queue_.push_back(f);
   }
 
-  void add_to_post_command_queue(std::function<void ()> f)
+  void add_to_post_command_queue(std::function<void ()> f) noexcept
   {
     do_draw();
 
@@ -939,7 +982,7 @@ public:
   }
 
 
-  void run_command_queue()
+  void run_command_queue() noexcept
   {
     std::lock_guard<std::mutex> lock(mutex_);
 
@@ -950,7 +993,7 @@ public:
     for (auto& c : q) c();
   }
 
-  void run_post_command_queue()
+  void run_post_command_queue() noexcept
   {
     std::lock_guard<std::mutex> lock(mutex_);
 
@@ -1056,6 +1099,7 @@ public:
 
   std::string name_;
   float font_size_{1.0};         // 1 = no scaling, < 1 => smaller, > 1 => bigger
+  float prev_font_size_{1.0};
   std::shared_ptr<font> font_;
 
   float version_;
@@ -1071,6 +1115,8 @@ public:
   double pixel_ratio_screen_ = 1; // the screen pixel ratio
   double pixel_ratio_        = 1; // the pixel ratio to use: a client set zoom including screen pixel_ratio
 
+  double prev_pixel_ratio_   = 1; // the previous pixel_ratio
+
   float x_offset_ = 0;
   float y_offset_ = 0;
 
@@ -1085,6 +1131,8 @@ public:
 
   std::string fragment_;  // the current thing we're viewing
   std::function<void (const std::string&)> fragment_cb_;
+
+  bool is_focused_{false};
 
   bool to_draw_{true};
   bool in_draw_{false};

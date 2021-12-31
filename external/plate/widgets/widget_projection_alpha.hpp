@@ -8,7 +8,7 @@
 
 namespace plate {
 
-class widget_projection : public ui_event_destination
+class widget_projection_alpha : public ui_event_destination
 {
 
 public:
@@ -22,12 +22,14 @@ public:
   
   void display() noexcept
 	{
-    ui_->projection_.push_transform(transform);
+    ui_->projection_.push_transform(transform_);
+    ui_->alpha_.push_transform(alpha_);
   }
 
   void undisplay() noexcept
 	{
     ui_->projection_.pop();
+    ui_->alpha_.pop();
   }
 
 
@@ -44,7 +46,7 @@ public:
 
   void transform_start() noexcept
   {
-    gpu::matrix44_scale(transform, 1, 1, 1); // identity matrix
+    gpu::matrix44_scale(transform_, 1, 1, 1); // identity matrix
   }
 
 
@@ -62,9 +64,9 @@ public:
     std::array<float, 16> r;
 
     gpu::matrix44_shift(shift, x, y, z);
-    gpu::matrix44_mult(r, shift, transform);
+    gpu::matrix44_mult(r, shift, transform_);
 
-    transform = r;
+    transform_ = r;
   }
 
 
@@ -92,12 +94,12 @@ public:
 
     std::array<float, 16> temp1;
 
-    gpu::matrix44_mult(temp1, shift1, transform);
+    gpu::matrix44_mult(temp1, shift1, transform_);
 
     std::array<float, 16> temp2;
 
     gpu::matrix44_mult(temp2, scale, shift1);
-    gpu::matrix44_mult(transform, shift2, temp2);
+    gpu::matrix44_mult(transform_, shift2, temp2);
   }
 
 
@@ -123,25 +125,29 @@ public:
     gpu::matrix44_scale(scale, s, s, s);
     gpu::matrix44_shift(shift2, ui_->projection_.width_ / 2.0, ui_->projection_.height_ / 2.0, 0);
 
-    std::array<float, 16> temp1;
+    std::array<float, 16> temp;
 
-    gpu::matrix44_mult(temp1, shift1, transform);
+    gpu::matrix44_mult(temp, scale, shift1);
+    gpu::matrix44_mult(transform_, shift2, temp);
+  }
 
-    std::array<float, 16> temp2;
 
-    gpu::matrix44_mult(temp2, scale, temp1);
-    gpu::matrix44_mult(transform, shift2, temp1);
+  void set_transform_alpha(float a) noexcept
+  {   
+    alpha_ = a;
   }
 
 
   std::string_view name() const noexcept
   {
-    return "projection";
+    return "projection_aalpha";
   }
 
 
-  projection::proj_store transform;
+  projection::proj_store transform_;
 
-}; // widget_projection
+  float alpha_;
+
+}; // widget_projection_alpha
 
 } // namespace plate

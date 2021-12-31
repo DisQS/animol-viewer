@@ -13,12 +13,12 @@ class anim_alpha : public ui_anim
 public:
 
   void init(const std::shared_ptr<state>& _ui, const std::shared_ptr<ui_event_destination>& parent,
-                                                    std::uint32_t dir = Dir::Forward) noexcept
+                                         std::uint32_t dir = Dir::Forward, float time = 0.4) noexcept
   {
     ui_anim::init(_ui, Prop::None, parent);
 
     style_      = ui_anim::SoftSoft;
-    total_time_ = 0.4;
+    total_time_ = time;
 
     widget_alpha_ = make_anim<widget_alpha>(ui_, shared_from_this());
 

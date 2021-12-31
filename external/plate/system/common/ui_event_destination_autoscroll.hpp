@@ -33,37 +33,6 @@ public:
 
   enum class Axis { X, Y };  // The axis something operates on
 
-/*
-  ui_event_destination_autoscroll(std::shared_ptr<state>& s) :
-    ui_event_destination(s)
-  {
-  };
-
-
-  ui_event_destination_autoscroll(std::shared_ptr<state>& s, const gpu::int_box& coords, std::uint32_t prop) :
-    ui_event_destination(s, coords, prop)
-	{
-	};
-
-
-  ui_event_destination_autoscroll(std::shared_ptr<state>& s, const gpu::int_box& coords,
-                                              std::uint32_t prop, ui_event_destination* parent) :
-    ui_event_destination(s, coords, prop, parent)	
-  {
-	};
-
-
-  ui_event_destination_autoscroll(std::shared_ptr<state>& s, std::uint32_t prop, ui_event_destination* parent) :
-    ui_event_destination(s, prop, parent)
-  {
-  };
-
-
-  ~ui_event_destination_autoscroll()
-  {
-  };
-*/
-
   void set_scroll(scroll s)
   {
     scroll_x_ = s == scroll::X || s == scroll::XY;
@@ -98,14 +67,46 @@ public:
     if (!total &&fabs(x_.speed) < 200) // feels nicer to let slow scrolling continue
       return;
 
-    x_.mode = anim_mode::STILL;
-    x_.speed = 0;
-
-    if (get_past_height(Axis::X, x_.offset) != 0) // return home
+    if (scroll_x_)
     {
-      x_.mode = anim_mode::RETURN;
-      x_.start_offset = x_.offset;
-      x_.step = 0;
+      x_.mode = anim_mode::STILL;
+      x_.speed = 0;
+
+      if (auto off = get_past_height(Axis::X, x_.offset); off != 0) // return home
+      {
+        if (total)
+        {
+          x_.offset -= off;
+          scroll_update();
+        }
+        else // animate back
+        {
+          x_.mode = anim_mode::RETURN;
+          x_.start_offset = x_.offset;
+          x_.step = 0;
+        }
+      }
+    }
+
+    if (scroll_y_)
+    {
+      y_.mode = anim_mode::STILL;
+      y_.speed = 0;
+
+      if (auto off = get_past_height(Axis::Y, y_.offset); off != 0) // return home
+      {
+        if (total)
+        {
+          y_.offset -= off;
+          scroll_update();
+        }
+        else // animate back
+        {
+          y_.mode = anim_mode::RETURN;
+          y_.start_offset = y_.offset;
+          y_.step = 0;
+        }
+      }
     }
   }
 
@@ -368,21 +369,25 @@ public:
   {
     if (a == Axis::X)
     {
-      if (offset < 0) return offset;
+      if (offset < 0)
+        return offset;
 
       float max_pos = get_max_offset_x();
 
-      if (offset > max_pos) return offset - max_pos;
+      if (offset > max_pos)
+        return offset - max_pos;
 
       return 0;
     }
     else
     {
-      if (offset < 0) return offset;
+      if (offset < 0)
+        return offset;
 
       float max_pos = get_max_offset_y();
 
-      if (offset > max_pos) return offset - max_pos;
+      if (offset > max_pos)
+        return offset - max_pos;
 
       return 0;
     }

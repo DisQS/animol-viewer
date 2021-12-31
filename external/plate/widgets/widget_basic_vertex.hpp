@@ -40,6 +40,7 @@ public:
   void set_geometry(const gpu::int_box& coords) noexcept
 	{
     ui_event_destination::set_geometry(coords);
+    upload_uniform();
   }
 
 

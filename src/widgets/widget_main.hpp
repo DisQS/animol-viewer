@@ -64,10 +64,7 @@ public:
     if (url != "" && code != "")
       start_remote(url, code, description);
 
-    //else
-    //  set_load_button();
-
-    set_load_button();
+    send_keyboard();
   }
 
 
@@ -101,9 +98,6 @@ public:
 
     set_title();
     set_loading();
-
-    if (widget_select_)
-      set_load_button();
 
     if (widget_object_)
     {
@@ -180,6 +174,46 @@ public:
     return false;
   }
 
+
+  void show_load() noexcept
+  {
+    ui_event::directory_show_picker(".*\\.pdb$", [this] (std::string dir_name, std::vector<std::string>& files)
+    {
+      if (files.size() > 0)
+        start_local(dir_name, files);
+    });
+  }
+
+
+  void key_event(ui_event::KeyEvent event, std::string_view utf8, std::string_view code_utf8, ui_event::KeyMod mod)
+  {
+    if (event == ui_event::KeyEventDown)
+    {
+      create_control();
+
+      if (code_utf8 == "Space")
+      {
+        set_playing(!playing_);
+
+        if (auto w = widget_control_.lock())
+          w->update_status();
+
+        return;
+      }
+
+      if (code_utf8 == "ArrowLeft") // go back one second
+      {
+        set_frame(current_entry_ - (1.0 / frame_time_));
+        return;
+      }
+
+      if (code_utf8 == "ArrowRight") // go forwards one second
+      {
+        set_frame(current_entry_ + (1.0 / frame_time_));
+        return;
+      }
+    }
+  }
 
 
   std::string_view name() const noexcept
@@ -286,6 +320,9 @@ private:
     store_.resize(pdb_list_.size());
 
     generate_script();
+
+    if (auto w = widget_control_.lock())
+      w->update_status();
   }
 
   
@@ -667,49 +704,9 @@ private:
   }
 
 
-  void set_load_button()
+  void create_control() noexcept
   {
-    // button for loading local files
-
-    if (!(widget_select_ || ui_event::have_file_system_access_support()))
-      return;
-
-    gpu::int_box c;
-
-    c.p1.x = my_width() - (150 * ui_->pixel_ratio_);
-    c.p1.y = my_height() - (70 * ui_->pixel_ratio_);
-
-    c.p2.x = my_width()  - (10 * ui_->pixel_ratio_);
-    c.p2.y = my_height() - (10 * ui_->pixel_ratio_);
-
-    if (widget_select_)
-    {
-      widget_box_->set_geometry(c);
-      widget_select_->set_geometry(c);
-    }
-    else
-    {
-      widget_box_ = ui_event_destination::make_ui<widget_rounded_box>(ui_, c, Prop::Display, shared_from_this(),
-                                                                             ui_->select_color_, 15 * ui_->pixel_ratio_);
-
-      widget_select_ = ui_event_destination::make_ui<widget_text>(ui_, c, Prop::Display | Prop::Input, widget_box_, "Open local",
-                                                       gpu::align::CENTER, ui_->txt_color_, gpu::rotation{0.0f,0.0f,0.0f}, 0.8f);
-
-      widget_select_->set_click_cb([this]
-      {
-        ui_event::directory_show_picker(".*\\.pdb$", [this] (std::string dir_name, std::vector<std::string>& files) -> void
-        {
-          if (files.size() > 0)
-            start_local(dir_name, files);
-        });
-      });
-    }
-  }
-
-
-  void create_control()
-  {
-    if (pdb_list_.size() <= 1)
+    if (pdb_list_.empty())
       return;
 
     if (auto w = widget_control_.lock(); w)
@@ -726,9 +723,6 @@ private:
 
   std::shared_ptr<plate::widget_text>         widget_title_;
   std::shared_ptr<plate::widget_text>         widget_loading_;
-
-  std::shared_ptr<plate::widget_rounded_box>  widget_box_;
-  std::shared_ptr<plate::widget_text>         widget_select_;
 
   std::shared_ptr<plate::widget_object<vert, cols>> widget_object_;
 

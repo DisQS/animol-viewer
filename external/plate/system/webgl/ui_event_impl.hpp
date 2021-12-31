@@ -266,6 +266,20 @@ inline std::string get_fragment() noexcept
 }
 
 
+EM_JS(void, js_focus, (const char* name, int name_len),
+{
+  var w_name = UTF8ToString(name, name_len);
+
+  document.getElementById(w_name).focus();
+});
+
+
+inline void set_focus(const std::string& name) noexcept
+{
+  js_focus(name.data(), name.size());
+}
+
+
 EM_JS(int, js_file_system_access_support, (),
 {
   if ('showDirectoryPicker' in self)
@@ -381,6 +395,17 @@ void directory_load_file(std::string_view dir, std::string_view name, std::funct
 }
 
 
+float get_font_size() noexcept // 16 is default/standard
+{
+  float s = EM_ASM_DOUBLE(
+  {
+    return parseFloat(getComputedStyle(document.querySelector("body")).fontSize);
+  });
+
+  return s;
+}
+
+
 void stop()
 {
   auto ss = states_;
@@ -462,6 +487,14 @@ EM_BOOL f_window_focus(int event_type, [[maybe_unused]] const EmscriptenFocusEve
   {
     state* s = reinterpret_cast<plate::state*>(user_data);
     s->incoming_focus(true);
+
+    return EM_TRUE;
+  }
+
+  if (event_type == EMSCRIPTEN_EVENT_FOCUSOUT)
+  {
+    state* s = reinterpret_cast<plate::state*>(user_data);
+    s->incoming_focus(false);
 
     return EM_TRUE;
   }
@@ -735,7 +768,8 @@ void add_dest(S* s, std::string canvas)
 
   // event: window_focus
 
-  emscripten_set_focus_callback(canvas.c_str(), s, EM_TRUE, f_window_focus);
+  emscripten_set_focus_callback   (canvas.c_str(), s, EM_TRUE, f_window_focus);
+  emscripten_set_focusout_callback(canvas.c_str(), s, EM_TRUE, f_window_focus);
 
   // event: key
   
@@ -793,7 +827,8 @@ void rm_dest(S* s, std::string canvas)
 
   // event: window_focus
 
-  emscripten_set_focus_callback(canvas.c_str(), nullptr, EM_TRUE, nullptr);
+  emscripten_set_focus_callback   (canvas.c_str(), nullptr, EM_TRUE, nullptr);
+  emscripten_set_focusout_callback(canvas.c_str(), nullptr, EM_TRUE, nullptr);
 
   // event: key
   

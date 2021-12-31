@@ -39,13 +39,6 @@ EM_JS(void, js_set_dims, (float w, float h, const char* name, int name_len),
   context.style.height = h + "px";
 });
 
-EM_JS(void, js_focus, (const char* name, int name_len),
-{
-  var w_name = UTF8ToString(name, name_len);
-
-  document.getElementById(w_name).focus();
-});
-
 
 namespace plate {
 
@@ -61,18 +54,7 @@ bool is_darkmode()
   });
 
   return x;
-};
-
-
-float get_font_size() // 16 is default/standard
-{
-  float s = EM_ASM_DOUBLE(
-  {
-    return parseFloat(getComputedStyle(document.querySelector("body")).fontSize);
-  });
-
-  return s;
-};
+}
 
 
 //int ctx_{0};
@@ -80,14 +62,6 @@ float get_font_size() // 16 is default/standard
 std::vector<std::pair<int, std::shared_ptr<state>>> windows_;
 
 std::uint64_t current_frame_{0};
-
-// at the moment all callbacks are in main thread - so just run f..
-
-//inline void add_to_command_queue(std::function<void ()> f)
-//{
-//  f();
-//};
-
 
 
 EM_BOOL generate_frame(double now, void *userData)
@@ -155,7 +129,7 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
   s->viewport_height_ = (int)h;
 
   s->pixel_ratio_screen_ = emscripten_get_device_pixel_ratio();
-  s->pixel_ratio_        = s->pixel_ratio_screen_;
+  s->set_pixel_ratio(s->pixel_ratio_screen_);
 
   // use float or int versions...?
 
@@ -280,7 +254,7 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
 
   s->set_darkmode(is_darkmode());
 
-  s->set_font_size(get_font_size() / 20.0);
+  s->set_font_size(ui_event::get_font_size() / 20.0);
 
   log_debug(FMT_COMPILE("canvas: {} device_type: {} device_touch: {} darkmode: {} font_size: {}"),
           canvas_name, ui_event::DeviceType_string(device_type), ui_event::DeviceHasTouch_string(device_touch),
@@ -291,7 +265,7 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
   else
 	  glClearColor(1.0, 1.0, 1.0, 1.0);
 
-  js_focus(canvas_name.data() + 1, canvas_name.size() - 1);
+  s->set_focus();
 
   return s;
 }
@@ -301,7 +275,7 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
 void arch_resize(plate::state* s, int w, int h)
 {
   s->pixel_ratio_screen_ = emscripten_get_device_pixel_ratio();
-  s->pixel_ratio_        = s->pixel_ratio_screen_;
+  s->set_pixel_ratio(s->pixel_ratio_screen_);
 
   s->pixel_width_  = w;
   s->pixel_height_ = h;
@@ -317,6 +291,8 @@ void arch_resize(plate::state* s, int w, int h)
 
   s->projection_.set(s->pixel_width_, s->pixel_height_);
   glViewport(0, 0, s->pixel_width_, s->pixel_height_);
+
+  s->set_font_size(ui_event::get_font_size() / 20.0);
 
   s->do_reshape();
 
@@ -349,6 +325,8 @@ void arch_resize(plate::state* s)
 
   s->projection_.set(s->pixel_width_, s->pixel_height_);
   glViewport(0, 0, s->pixel_width_, s->pixel_height_);
+
+  s->set_font_size(ui_event::get_font_size() / 20.0);
 
   s->do_reshape();
 }

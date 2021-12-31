@@ -192,6 +192,8 @@ extern inline void open_url(std::string_view name) noexcept;
 extern inline void set_fragment(std::string_view name) noexcept;
 extern inline std::string get_fragment() noexcept;
 extern std::string get_tz() noexcept;
+extern void set_focus(const std::string& name) noexcept;
+extern float get_font_size() noexcept;
 
 extern double now();
 
@@ -202,21 +204,6 @@ extern void add_dest(S*, std::string);
   
 template<class S>
 extern void rm_dest(S*, std::string);
-
-
-// called by implementation
-/*
-extern inline void window_size(int width, int height);
-extern inline void window_focus(bool focus);
-extern inline void window_iconified(bool iconified);
-extern inline void orientation(enum Orientation orientation);
-extern inline void key(enum KeyEvent event, std::string_view utf8, std::string_view code_utf8, enum KeyMod mods);
-extern inline void mouse_position(double x_pos, double y_pos);
-extern inline void mouse_over(bool over);
-extern inline void mouse_button(enum MouseButtonEvent event, enum MouseButton button, enum KeyMod mods);
-extern inline void scroll_wheel(double x_delta, double y_delta);
-extern inline void touch(enum TouchEvent event, int id, int x, int y);
-*/
 
 }; // namespace ui_event
 }; // namespace plate

@@ -107,15 +107,26 @@ public:
   };
 
   gpu::float_box generate_vertex(const std::string_view text, std::vector<float>& vertex, float zoom = 1.0,
-                                              std::vector<offset>* offset = nullptr)
+                                    int max_width = 0, std::vector<offset>* offset = nullptr)
   {
     float pen_x = 0;
     float pen_y = 0;
 
     float y_low = 999;
     float y_high = -999;
+    float x_high = -999;
   
     const char * t = text.data();
+
+    // get em scale
+  
+    float scale = static_cast<double>(size_) / static_cast<double>(ttf_.get_units_per_em());
+
+    // for wrapping
+
+    int prev_space_pos = 0;   // the previous space position, ie, where to wrap from
+    int chars_in_word  = 0;   // how many characters are in the word so far - so know how far back to go
+    int word_start_x   = 0;   // pixel the word starts at
 
     std::uint32_t prev_glyph_id = 0;
   
@@ -123,11 +134,27 @@ public:
     {
       auto this_i = i;
 
-      const char * current = t + i;
+      const char* current = t + i;
 
       std::uint32_t unicode = utf8_to_utf32(current);
 
       i += utf8_surrogate_len(current);
+
+      ++chars_in_word;
+
+      if (unicode == 32 || unicode == 10) // is a space or newline
+      {
+        prev_space_pos = this_i;
+        chars_in_word  = 0;
+        word_start_x   = pen_x;
+
+        if (unicode == 10) // new line
+        {
+          pen_x  = 0;
+          pen_y -= get_max_height() * zoom * 1.2;
+          continue;
+        }
+      }
 
       // find glyph id
 
@@ -148,16 +175,6 @@ public:
       // get advance
 
       auto advance = ttf_.get_advance_x(glyph_id);
-
-      //if (advance == 0)
-      //{
-        //log_debug(FMT_COMPILE("Got a 0 advance for glyph_id: {}"), glyph_id);
-        //continue;
-      //}
-
-      // get em scale
-
-      float scale = static_cast<double>(size_) / static_cast<double>(ttf_.get_units_per_em());
 
       // get kerning
 
@@ -180,6 +197,32 @@ public:
 
       const float x2 = x + (b.bounds_r - b.bounds_l) * scale * zoom;
       const float y2 = y + (b.bounds_t - b.bounds_b) * scale * zoom;
+
+      if (max_width > 0 && x2 >= max_width && unicode != 32) // too wide to fit
+      {
+        // increment line pos and rewind processing from last space
+
+        prev_glyph_id = 0;
+
+        pen_x  = 0;
+        pen_y -= get_max_height() * zoom * 1.2;
+
+        if (word_start_x == 0) // if we started at 0 simply new line at word wrap won't fit
+        {
+          i = this_i;
+
+          continue;
+        }
+        else
+        {
+          vertex.resize(vertex.size() - (36 * chars_in_word));
+          word_start_x  = 0;
+          chars_in_word = 0;
+          i = prev_space_pos + 1;
+
+          continue;
+        }
+      }
   
       GLfloat glyph_vertex[36] = { x,  y,  0, 1,    b.atlas_l, b.atlas_b,
                                    x2, y,  0, 1,    b.atlas_r, b.atlas_b,
@@ -201,10 +244,16 @@ public:
       if (y2 > y_high)
         y_high = y2;
 
+      if (x2 > x_high)
+        x_high = x2;
+
       prev_glyph_id = glyph_id;
     }
+
+    if (max_width > 0)
+      x_high = std::min(static_cast<float>(max_width), x_high);
   
-    return { { 0, y_low }, { pen_x, y_high } };
+    return { { 0, y_low }, { x_high, y_high } };
   }
 
 

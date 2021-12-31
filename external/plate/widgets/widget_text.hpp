@@ -26,10 +26,7 @@ public:
     rotation_ = r;
     fscale_   = fscale;
 
-    float font_scale = ui_->pixel_ratio_ * ui_->font_size_ * fscale_;
-
     upload_vertex();
-
     upload_uniform();
   }
 
@@ -133,7 +130,11 @@ public:
 
     ui_event_destination::set_geometry(coords);
 
-    upload_vertex();
+    if (ui_->any_size_changed())
+      upload_vertex();
+    else
+      align_to_box();
+
     upload_uniform();
   }
 
@@ -158,7 +159,7 @@ private:
 
     std::vector<float> vertex;
 
-    auto vpos = ui_->font_->generate_vertex(text_, vertex, font_scale);
+    auto vpos = ui_->font_->generate_vertex(text_, vertex, font_scale, (align_ & gpu::align::WRAP) ? coords_.width() : 0);
 
     max_width_ = ceil(vpos.p2.x);
     y_low_ = vpos.p1.y;

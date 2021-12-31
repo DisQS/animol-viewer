@@ -7,6 +7,10 @@
 #include <cstddef>
 #include <cstdlib>
 
+#define FMT_HEADER_ONLY 1
+#include "fmt/format.h"
+#include "fmt/compile.h"
+
 
 /*
     provides utility interfaces for:
@@ -65,7 +69,8 @@ namespace gpu {
     CENTER    = 1<<2,
     TOP       = 1<<3,
     BOTTOM    = 1<<4,
-    OUTSIDE   = 1<<5    // used for eg: fonts when want the font height rather than the displayed height
+    OUTSIDE   = 1<<5,   // used for eg: fonts when want the font height rather than the displayed height
+    WRAP      = 1<<6    // used for eg: text to wrap inside a box
   };
 
   // colors
@@ -223,6 +228,13 @@ namespace gpu {
     r[4]  = 0; r[5]  = y; r[6]  = 0; r[7]  = 0;
     r[8]  = 0; r[9]  = 0; r[10] = z; r[11] = 0;
     r[12] = 0; r[13] = 0; r[14] = 0; r[15] = 1;
+  }
+
+  
+  void matrux44_print(std::array<float, 16>& r) noexcept
+  {
+    fmt::print(FMT_COMPILE("{} {} {} {}\n{} {} {} {}\n{} {} {} {}\n{} {} {} {}\n"),
+      r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9], r[10], r[11], r[12], r[13], r[14], r[15]);
   }
 
 

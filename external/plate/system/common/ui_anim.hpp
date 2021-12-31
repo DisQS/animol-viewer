@@ -135,10 +135,26 @@ protected:
 
         // slow, fast, slow based on sin(-PI/2) -> sin(PI/2)
   
-        if (f < 0.5)
+        /*if (f < 0.5)
           return (float)(sin(f * M_PI - (M_PI/2.0)) + 1) / 2.0;
         else
-          return 0.5 + (float)sin(f * M_PI - (M_PI/2.0)) / 2.0;
+          return 0.5 + (float)sin(f * M_PI - (M_PI/2.0)) / 2.0;*/
+        {
+          // see https://www.desmos.com/calculator/ieqvddyt8f for function
+          
+          constexpr float factor = 9.7f; // higher for sharper transition
+
+          auto logistic = [&factor] (float f)
+          {
+            return 1.0f/(1.0f + std::exp(-factor*(f-0.5f)));
+          }; 
+
+          /*constexpr*/ float offset = logistic(0); // shift to get result of 0 when f is 0
+
+          /*constexpr*/ float stretch = logistic(1) - offset; // stretch to get result of 1 when f is 1
+
+          return (logistic(f) - offset) / stretch;
+        }
 
       case Style::HoldSoftSoft:
 

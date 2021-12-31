@@ -16,12 +16,12 @@ public:
   enum class Options { None, FixedStencil };
 
   void init(const std::shared_ptr<state>& _ui, const std::shared_ptr<ui_event_destination>& parent,
-                Options options, float x, float y, float z, std::uint32_t dir = Dir::Forward) noexcept
+                Options options, float x, float y, float z, std::uint32_t dir = Dir::Forward, float time = 0.6) noexcept
   {
     ui_anim::init(_ui, Prop::None, parent);
 
     style_      = ui_anim::SoftSoft;
-    total_time_ = 0.6;
+    total_time_ = time;
         
     if (options == Options::FixedStencil)
     {
@@ -54,6 +54,7 @@ public:
 
   void on_change() noexcept
   {
+    widget_proj_->transform_start();
     widget_proj_->set_transform_shift(anim_offset_x_, anim_offset_y_, anim_offset_z_);
   }
 
