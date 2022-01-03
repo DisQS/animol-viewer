@@ -6,20 +6,6 @@ uniform highp vec4 col;
 uniform highp vec2 ts;
 
 uniform sampler2D tex;
-/*
-void main()
-{
-  highp vec2 msdf_unit = 2.0 / ts;
-  highp vec3 s = texture2D(tex, out_tex_coord.xy).rgb;
-  highp float sig_dist = max(min(s.r, s.g), min(max(s.r, s.g), s.b)) - 0.5;
-#ifdef GL_OES_standard_derivatives
-  sig_dist *= dot(msdf_unit, 0.5 / fwidth(out_tex_coord.xy));
-#endif
-  highp float opacity = clamp(sig_dist + 0.5, 0.0, 1.0);
-  gl_FragColor = col;
-  gl_FragColor.a = gl_FragColor.a * opacity;
-}
-*/
 
 void main()
 {

@@ -17,7 +17,11 @@ public:
                      const std::string& text, const std::array<gpu::color, 2>& c, 
                      const std::array<gpu::color, 2>& bg_c, float font_scale, int border) noexcept
   {
-    ui_event_destination_autoscroll::init(_ui, coords, Prop::Input | Prop::Swipe | Prop::Display, parent);
+    // shrink the autoscroll coords to allow for the border
+
+    gpu::int_box cc = { { coords.p1.x + border, coords.p1.y + border }, { coords.p2.x - border, coords.p2.y - border } };
+
+    ui_event_destination_autoscroll::init(_ui, cc, Prop::Input | Prop::Swipe | Prop::Display, parent);
 
     text_     = text;
     color_    = c;
@@ -54,23 +58,15 @@ public:
 
   void display() noexcept
   {
-    ui_->stencil_->push();
-
-    wbox_bg_->display();
-
-    ui_->stencil_->render();
-
-    wbox_bg_->display();
+    stencil s(&ui_->stencil_state_, wbox_bg_.get());
 
     if (!text_.empty())
     {
       pre_display();
-  
-      ui_->shader_text_msdf_->draw(ui_->projection_, ui_->alpha_, uniform_buffer_, vertex_buffer_, ui_->font_->texture_,
-                      color_[ui_->color_mode_], ui_->font_->get_atlas_width(), ui_->font_->get_atlas_height());
-    }
 
-    ui_->stencil_->pop();
+      ui_->shader_text_msdf_->draw(ui_->projection_, ui_->alpha_, uniform_buffer_, vertex_buffer_, ui_->font_->texture_,
+                    color_[ui_->color_mode_], ui_->font_->get_atlas_width(), ui_->font_->get_atlas_height());
+    }
   }
 
 
@@ -88,9 +84,11 @@ public:
 
   void set_geometry(const gpu::int_box& coords) noexcept
   {
+    gpu::int_box cc = { { coords.p1.x + border_, coords.p1.y + border_ }, { coords.p2.x - border_, coords.p2.y - border_ } };
+
     auto old_width = coords_.width();
 
-    ui_event_destination_autoscroll::set_geometry(coords);
+    ui_event_destination_autoscroll::set_geometry(cc);
 
     create_bg();
 

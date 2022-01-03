@@ -15,7 +15,7 @@ class ui_anim : public ui_event_destination
 public:
 
 
-  enum Style { SoftSoft, SoftHard, HardSoft, HoldSoftSoft, Linear };
+  enum Style { Sine, SoftSoft, LogisticMedium, SoftHard, HardSoft, HoldSoftSoft, Linear };
   enum Dir   { Forward, Reverse };
 
   struct targets
@@ -131,18 +131,35 @@ protected:
 
     switch (style_)
     {
-      case Style::SoftSoft:
+      case Style::Sine:
 
         // slow, fast, slow based on sin(-PI/2) -> sin(PI/2)
   
-        /*if (f < 0.5)
-          return (float)(sin(f * M_PI - (M_PI/2.0)) + 1) / 2.0;
-        else
-          return 0.5 + (float)sin(f * M_PI - (M_PI/2.0)) / 2.0;*/
+        return static_cast<float>(sin(f * M_PI - (M_PI/2.0)) + 1) / 2.0f;
+
+      case Style::SoftSoft:
         {
           // see https://www.desmos.com/calculator/ieqvddyt8f for function
           
           constexpr float factor = 9.7f; // higher for sharper transition
+
+          auto logistic = [&factor] (float f)
+          {
+            return 1.0f/(1.0f + std::exp(-factor*(f-0.5f)));
+          }; 
+
+          /*constexpr*/ float offset = logistic(0); // shift to get result of 0 when f is 0
+
+          /*constexpr*/ float stretch = logistic(1) - offset; // stretch to get result of 1 when f is 1
+
+          return (logistic(f) - offset) / stretch;
+        }
+
+      case Style::LogisticMedium:
+        {
+          // see https://www.desmos.com/calculator/ieqvddyt8f for function
+          
+          constexpr float factor = 6.7f; // higher for sharper transition
 
           auto logistic = [&factor] (float f)
           {

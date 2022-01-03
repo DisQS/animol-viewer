@@ -41,21 +41,24 @@ public:
     if (!mouse_down_ && (x_speed_ != 0 || y_speed_ != 0))
       apply_momentum();
 
+    gpu::color bg = ui_->bg_color_[ui_->color_mode_];
+    bg.a *= ui_->alpha_.alpha_;
+
     if (model_ptrs_.empty()) // use built in vertex
     {
       if constexpr (std::is_same_v<bool, CTYPE>)
-        ui_->shader_object_->draw(ui_->projection_, uniform_buffer_, vertex_buffer_);
+        ui_->shader_object_->draw(ui_->projection_, bg, uniform_buffer_, vertex_buffer_);
       else
-        ui_->shader_object_->draw(ui_->projection_, uniform_buffer_, vertex_buffer_, vertex_color_buffer_);
+        ui_->shader_object_->draw(ui_->projection_, bg, uniform_buffer_, vertex_buffer_, vertex_color_buffer_);
     }
     else // use supplied buffers
     {
       for (auto& m : model_ptrs_)
       {
         if constexpr (std::is_same_v<bool, CTYPE>)
-          ui_->shader_object_->draw(ui_->projection_, uniform_buffer_, *m.vertex);
+          ui_->shader_object_->draw(ui_->projection_, bg, uniform_buffer_, *m.vertex);
         else
-          ui_->shader_object_->draw(ui_->projection_, uniform_buffer_, *m.vertex, *m.color);
+          ui_->shader_object_->draw(ui_->projection_, bg, uniform_buffer_, *m.vertex, *m.color);
       }
     }
 
@@ -122,10 +125,11 @@ public:
     if (mouse_down_ && m.id)
       return;
 
-    if (m.id & ui_event::MouseButtonLeft) // button down
+    if (m.id) // button down
+    {
       mouse_down_ = true;
-
-    if (!m.id) // button up
+    }
+    else // button up
     {
       mouse_down_ = false;
 

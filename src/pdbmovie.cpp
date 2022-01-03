@@ -40,19 +40,32 @@ public:
 
     w_->stop();
 
-    auto slide_out = plate::ui_event_destination::make_anim<plate::anim_projection>(
-              //s_, w_, plate::anim_projection::Options::None, 0,0,-4*w_->my_width(), plate::ui_anim::Dir::Reverse);
-              s_, w_, plate::anim_projection::Options::None, -w_->my_width(), 0, 0, plate::ui_anim::Dir::Reverse);
-
-    slide_out->set_end_cb([w(w_)]
+    if (w_->has_frame()) // there is a protein displayed, so slide it away, and slide new one in
     {
-      w->disconnect_from_parent();
-    });
+      auto slide_out = plate::ui_event_destination::make_anim<plate::anim_projection>(
+                s_, w_, plate::anim_projection::Options::None, -w_->my_width(), 0, 0, plate::ui_anim::Dir::Reverse, 0.4f);
 
-    run();
+      slide_out->set_end_cb([w(w_)]
+      {
+        w->disconnect_from_parent();
+      });
 
-    auto slide_in = plate::ui_event_destination::make_anim<plate::anim_projection>(
-             s_, w_, plate::anim_projection::Options::None, w_->my_width(), 0, 0, plate::ui_anim::Dir::Forward);
+      run();
+
+      auto slide_in = plate::ui_event_destination::make_anim<plate::anim_projection>(
+               s_, w_, plate::anim_projection::Options::None, w_->my_width(), 0, 0, plate::ui_anim::Dir::Forward, 0.4f);
+    }
+    else // no protein displayed, so quickly fade the current sreen away and show the new protein
+    {
+      auto fade_out = plate::ui_event_destination::make_anim<plate::anim_alpha>(s_, w_, plate::ui_anim::Dir::Reverse, 0.2f);
+
+      fade_out->set_end_cb([w(w_)]
+      {
+        w->disconnect_from_parent();
+      });
+
+      run();
+    }
   }
 
 
@@ -66,7 +79,7 @@ private:
 
     // setup colors
 
-    s_->bg_color_[0] = { 0.99f, 0.99f, 0.99f, 1.0f };
+    s_->bg_color_[0] = { 1.0f, 1.0f, 1.0f, 1.0f };
     s_->bg_color_[1] = { 0.0f, 0.0f, 0.0f, 1.0f };
 
     s_->bg_color_inv_[0] = s_->bg_color_[1];

@@ -63,6 +63,8 @@ public:
 
     if (url != "" && code != "")
       start_remote(url, code, description);
+    else
+      create_control();
 
     send_keyboard();
   }
@@ -110,8 +112,6 @@ public:
       gpu::int_box cc = { coords_.p1, { coords_.p2.x, static_cast<int>(coords_.p1.y + (control_height_ * ui_->pixel_ratio_)) } };
       w->set_geometry(cc);
     }
-
-    ui_->do_draw();
   }
 
 
@@ -152,8 +152,17 @@ public:
   }
 
 
-  inline bool set_frame(int frame) noexcept
+  inline bool has_frame() const noexcept
   {
+    return widget_object_.get() != nullptr;
+  }
+
+
+  bool set_frame(int frame) noexcept
+  {
+    if (store_.empty())
+      return false;
+
     if (frame < 0)
       frame = 0;
 
@@ -212,6 +221,18 @@ public:
         set_frame(current_entry_ + (1.0 / frame_time_));
         return;
       }
+
+      if (code_utf8 == "ArrowUp") // go forwards one frame
+      {
+        set_frame(current_entry_ + 1);
+        return;
+      }
+
+      if (code_utf8 == "ArrowDown") // go back one frame
+      {
+        set_frame(current_entry_ - 1);
+        return;
+      }
     }
   }
 
@@ -236,6 +257,9 @@ private:
 
     set_title();
     set_loading();
+
+    if (auto w = widget_control_.lock())
+      w->update_status();
 
     // load in movie plan file
 
@@ -320,15 +344,16 @@ private:
     store_.resize(pdb_list_.size());
 
     generate_script();
-
-    if (auto w = widget_control_.lock())
-      w->update_status();
   }
 
   
   void generate_script() noexcept
   {
+    ui_->do_draw();
     set_loading();
+
+    if (auto w = widget_control_.lock())
+      w->update_status();
 
     auto old_worker = std::move(worker_); // delete the old one (if any) after we have created a new one
 
@@ -537,6 +562,8 @@ private:
       create_control();
     });
 
+    auto fade_in = plate::ui_event_destination::make_anim<plate::anim_alpha>(ui_, widget_object_, plate::ui_anim::Dir::Forward, 0.3f);
+
     // loop through data to find protein width
 
     p = reinterpret_cast<std::byte*>(d.data()) + sizeof(compact_header);
@@ -661,8 +688,12 @@ private:
       widget_title_->set_geometry(c);
     }
     else
+    {
       widget_title_ = ui_event_destination::make_ui<widget_text>(ui_, c, Prop::Display, shared_from_this(), title,
                                                         gpu::align::CENTER, ui_->txt_color_, gpu::rotation{0.0f,0.0f,0.0f}, 0.8f);
+
+      auto fade_in = plate::ui_event_destination::make_anim<plate::anim_alpha>(ui_, widget_title_, plate::ui_anim::Dir::Forward, 0.4f);
+    }
   }
 
 
@@ -671,7 +702,12 @@ private:
     std::string loading;
 
     if (current_entry_ == -1) // haven't loaded plan/directory listing
-      loading = "loading: plan";
+    {
+      if (item_ == "")
+        loading = "";
+      else
+        loading = "loading: plan";
+    }
     else
     {
       if (loaded_count_ == pdb_list_.size()) // all loaded
@@ -700,15 +736,14 @@ private:
     {
       widget_loading_ = ui_event_destination::make_ui<widget_text>(ui_, c, Prop::Display, shared_from_this(), loading,
                                   gpu::align::BOTTOM | gpu::align::OUTSIDE, ui_->txt_color_, gpu::rotation{0.0f,0.0f,0.0f}, 0.8f);
+
+      auto fade_in = plate::ui_event_destination::make_anim<plate::anim_alpha>(ui_, widget_loading_, plate::ui_anim::Dir::Forward, 2.0f);
     }
   }
 
 
   void create_control() noexcept
   {
-    if (pdb_list_.empty())
-      return;
-
     if (auto w = widget_control_.lock(); w)
     {
       w->user_interacted();
@@ -763,7 +798,7 @@ private:
 
   std::unique_ptr<worker> worker_; // a multi-threaded worker for performaing background tasks
 
-  constexpr static int control_height_ = 50;
+  constexpr static int control_height_ = 55;
 
 }; // class widget_main
 

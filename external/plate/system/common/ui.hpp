@@ -38,7 +38,6 @@ class shader_rounded_box;
 
 class font;
 
-class stencil;
 class scissor;
 class ui_anim;
 
@@ -105,14 +104,20 @@ public:
   {
     if (v)
     {
-      if (color_mode_ == 1) return; // already set
+      if (color_mode_ == 1) // already set
+        return;
+
       color_mode_ = 1;
     }
     else
     {
-      if (color_mode_ == 0) return; // already set
+      if (color_mode_ == 0) // already set
+        return;
+
       color_mode_ = 0;
     }
+
+    glClearColor(bg_color_[color_mode_].r, bg_color_[color_mode_].g, bg_color_[color_mode_].b, bg_color_[color_mode_].a);
  
     // notify widgets of change
 
@@ -397,8 +402,6 @@ public:
   {
     do_draw();
   
-    bool enable_button_move_find_widget = false; // whether we can attach a widget to a mouse move with button   down
-  
     // store the delta from its last position
   
     if (mouse_metric_.pos.x != -1)
@@ -412,33 +415,31 @@ public:
     mouse_metric_.pos.x = x;
     mouse_metric_.pos.y = y;
   
+    bool enable_button_move_find_widget = false; // whether we can attach a widget to a mouse move with button down
+  
     // store speed if mouse button pressed
   
     if (mouse_metric_.id)
     {
-      double now = ui_event::now();
+      const double now = ui_event::now();
   
       mouse_metric_.history_x.push_back({ now, mouse_metric_.delta.x });
       mouse_metric_.history_y.push_back({ now, mouse_metric_.delta.y });
     
-      auto sx = mouse_metric_.start_pos.x;
-      auto sy = mouse_metric_.start_pos.y;
+      const auto sx = mouse_metric_.start_pos.x;
+      const auto sy = mouse_metric_.start_pos.y;
 
       if ( !mouse_metric_.swipe && ((x-sx)*(x-sx) + (y-sy)*(y-sy) > MOVE_STICKY) )
       {
         mouse_metric_.swipe = true;
         mouse_metric_.start_pos2.x = x;
         mouse_metric_.start_pos2.y = y;
-        //printf("setting swipe to true, id: %d", mouse_metric_.id);
   
-        if (mouse_metric_.current)
+        if (mouse_metric_.current && !mouse_metric_.current->supports_swipe()) // does the current widget not support swipe?
         {
-          if (!mouse_metric_.current->supports_swipe())
-          {
-            mouse_metric_.current->ui_out();
-            mouse_metric_.current = nullptr;
-            enable_button_move_find_widget = true; // allow assigning another widget to this move event
-          }
+          mouse_metric_.current->ui_out();
+          mouse_metric_.current = nullptr;
+          enable_button_move_find_widget = true; // allow assigning another widget to this move event
         }
       }
     }
@@ -447,8 +448,9 @@ public:
   
     // a send_all overrides all actions
   
-    if (send_all_) {
-      if (send_all_->ui_mouse_position_update())
+    if (send_all_)
+    {
+      if (send_all_->ui_mouse_position_update()) // return false to relinquish control
         return;
       else
         send_all_ = nullptr;
@@ -458,53 +460,50 @@ public:
     {
       if (mouse_metric_.current)
       {
-        if (mouse_metric_.current->ui_mouse_position_update())
+        if (!mouse_metric_.current->supports_swipe()) // nothing to do here as swipe is less than MOVE_STICKY
           return;
-        else
-          mouse_metric_.current = nullptr;
+
+        mouse_metric_.current->ui_mouse_position_update();
+
+        return;
       }
-      else
+      else // nothing is current
       {
-        if (!enable_button_move_find_widget) return; // a move event doesn't propagate by default
+        if (enable_button_move_find_widget) // switch to the widget which handles swipe if any
+        {
+          mouse_metric_.current  = top_widget_->tree_find_input(x, y, mouse_metric_.swipe);
+
+          if (mouse_metric_.current)
+          {
+            mouse_metric_.current->ui_mouse_button_update();
+            mouse_metric_.current->ui_mouse_position_update();
+          }
+        }
+        return;
       }
     }
 
-    // if we are already sending then see if still on this widget...
-    // if not issue a send out and send move to other widget
+    // no buttons pressed, find the widget under the mouse position and send it a position update
 
-    auto w = top_widget_->tree_find_input(x, y, mouse_metric_.swipe);
+    auto w = top_widget_->tree_find_input(x, y, false);
 
-    if (w && mouse_metric_.current == w)
+    if (mouse_metric_.current && (w != mouse_metric_.current)) // send a ui_out to previous widget
+      mouse_metric_.current->ui_out();
+
+    if (w)
     {
-      if (mouse_metric_.current->ui_mouse_position_update())
-        return;
-      else
-        mouse_metric_.current = nullptr;
-    }
-    else
-    {
-      if (mouse_metric_.current)
-        mouse_metric_.current->ui_out();
-
       mouse_metric_.current = w;
-
-      if (w && mouse_metric_.current->ui_mouse_position_update())
-        return;
-      else
-        mouse_metric_.current = nullptr;
+      mouse_metric_.current->ui_mouse_position_update();
     }
   }
 
 
-  void incoming_mouse_button(ui_event::MouseButtonEvent event, ui_event::MouseButton button,
-                              ui_event::KeyMod mods) noexcept
+  void incoming_mouse_button(ui_event::MouseButtonEvent event, ui_event::MouseButton button, ui_event::KeyMod mods) noexcept
   {
     if (event == ui_event::MouseButtonEventClick || event == ui_event::MouseButtonEventDoubleClick)
       return;
 
     do_draw();
-  
-    //printf("got mouse_button: %d event: %d current: %d mods: %d\n", button, event, mouse_metric_.id, mods);
   
     // update the mouse status, if it's first time down then setup speed indicators, if they're all up apply speed
   
@@ -518,8 +517,6 @@ public:
 
       if (mouse_metric_.id == 0) // no other mouse buttons are currently down
       {
-        mouse_metric_.current = nullptr;
-
         mouse_metric_.id = button;
   
         mouse_metric_.swipe        = false;
@@ -532,16 +529,36 @@ public:
         mouse_metric_.delta = {0, 0};
         mouse_metric_.prev_down_start = mouse_metric_.down_start;
         mouse_metric_.down_start = now;
+
+        auto w = top_widget_->tree_find_input(mouse_metric_.pos.x, mouse_metric_.pos.y, false);
+
+        if (mouse_metric_.current && (w != mouse_metric_.current)) // send a ui_out to previous widget
+          mouse_metric_.current->ui_out();
+
+        mouse_metric_.current = w;
       }
       else // another button is already down, so simply add it
       {
         mouse_metric_.id |= button;
       }
+
+      if (send_all_)
+      {
+        mouse_metric_.current = nullptr;
+        send_all_->ui_mouse_button_update();
+      }
+      else
+      {
+        if (mouse_metric_.current)
+          mouse_metric_.current->ui_mouse_button_update();
+      }
+
+      return;
     }
   
     if (event == ui_event::MouseButtonEventUp)
     {
-      mouse_metric_.click        = !mouse_metric_.swipe && ((now - mouse_metric_.down_start) <= 200);
+      mouse_metric_.click        = !mouse_metric_.swipe && ((now - mouse_metric_.down_start)      <= 200);
       mouse_metric_.double_click = !mouse_metric_.swipe && ((now - mouse_metric_.prev_down_start) <= 400);
 
       mouse_metric_.id &= ~button;
@@ -554,7 +571,8 @@ public:
         {
           auto entry = mouse_metric_.history_x.back();
   
-          if (now - entry.first > 100) break; // only look at very recent movement
+          if (now - entry.first > 100)// only look at very recent movement
+            break;
   
           distance += entry.second;
   
@@ -570,7 +588,8 @@ public:
         {
           auto entry = mouse_metric_.history_y.back();
 
-          if (now - entry.first > 100) break; // only look at very recent movement, 100ms
+          if (now - entry.first > 100) // only look at very recent movement, 100ms
+            break;
   
           distance += entry.second;
   
@@ -580,57 +599,27 @@ public:
         mouse_metric_.history_y.clear();
         mouse_metric_.speed.y = distance/0.11;
   
-        //printf("setting swipe to false, id: %d\n", mouse_metric_.id);
         mouse_metric_.swipe = false;
       }
-    }
-  
-    // send to widgets
 
-    // a send_all overrides all actions
-  
-    if (send_all_)
-    {
-      send_all_->ui_mouse_button_update();
-  
-      if (mouse_metric_.id == 0)
-        mouse_metric_.current = nullptr;
-  
-      return;
-    }
+      if (send_all_)
+      {
+        send_all_->ui_mouse_button_update();
+      }
+      else
+      {
+        if (mouse_metric_.current)
+        {
+          mouse_metric_.current->ui_mouse_button_update();
 
-    // if something is current (due to a down) then send it all future events
-  
-    if (mouse_metric_.current)
-    {
-      mouse_metric_.current->ui_mouse_button_update();
-  
-      if (mouse_metric_.id == 0)
-        mouse_metric_.current = nullptr;
+          if (mouse_metric_.id == 0)
+            mouse_metric_.current = nullptr;
+        }
+      }
 
       return;
     }
-  
-    // find a widget to send this event to
-  
-    mouse_metric_.current = top_widget_->tree_find_input(mouse_metric_.pos.x, mouse_metric_.pos.y,
-                                                                                  mouse_metric_.swipe);
-
-    if (mouse_metric_.current)
-    {
-      mouse_metric_.current->ui_mouse_button_update();
-  
-      return;
-    }
-
-    if (send_keyboard_events_)
-    {
-      send_keyboard_events_->deactivate();
-      send_keyboard_events_ = nullptr;
-    }
-  
-    log_debug("found nothing to send to");
-  };
+  }
 
 
   void incoming_touch(ui_event::TouchEvent event, int id, int x, int y) noexcept
@@ -643,13 +632,13 @@ public:
     auto& m = touch_metric_[id];
     m.st = event;
 
-    double now = ui_event::now();
+    const double now = ui_event::now();
 
     switch (event)
     {
       case ui_event::TouchEventDown:
       {
-        set_focus();
+        // set_focus(); // causes a jump as it moves the widget fully on the screen, disable for now
 
         m.id = id;
 
@@ -685,18 +674,20 @@ public:
         if (w)
         {
           if (w->ui_touch_update(id))
+          {
             m.current = w;
 
-          // has this formed a multi touch?
+            // has this formed a multi touch?
 
-          for (auto& n : touch_metric_)
-          {
-            if (n.st != 0 && n.id != m.id && n.current == m.current)
+            for (auto& n : touch_metric_)
             {
-              n.multi = true;
-              m.multi = true;
+              if (n.st != 0 && n.id != m.id && n.current == m.current)
+              {
+                n.multi = true;
+                m.multi = true;
 
-              multi_touch_metric_.dist = 0;
+                multi_touch_metric_.dist = 0;
+              }
             }
           }
         }
@@ -705,30 +696,7 @@ public:
       }
       case ui_event::TouchEventUp:
       {
-      /*
-        if (m.multi)
-        {
-          int touch_count = 0;
-
-          for (const auto& n : touch_metric_)
-            if (n.st != 0)
-              touch_count++;
-
-          if (touch_count != 1)
-          {
-            m.st = 0;
-
-            for (auto& n : touch_metric_)
-              n.st = 0;
-
-            multi_touch_metric_.dist = 0;
-
-            return;
-          }
-        }
-        */
-
-        m.click = !m.swipe && ((now - m.down_start) <= 200);
+        m.click        = !m.swipe && ((now - m.down_start)      <= 200);
         m.double_click = !m.swipe && ((now - m.prev_down_start) <= 400);
 
         // calc speed
@@ -830,7 +798,7 @@ public:
           }
         }
 
-        double now = ui_event::now();
+        //double now = ui_event::now();
 
         m.history_x.push_back({ now, m.delta.x });
         m.history_y.push_back({ now, m.delta.y });
@@ -845,8 +813,8 @@ public:
 
         bool enable_touch_move_find_widget = false; // if the user is swiping and the current widget doesn't support swipe, search
 
-        auto sx = m.start_pos.x;
-        auto sy = m.start_pos.y;
+        const auto sx = m.start_pos.x;
+        const auto sy = m.start_pos.y;
 
         if ( !m.swipe && ((x-sx)*(x-sx) + (y-sy)*(y-sy) > MOVE_STICKY) )
         {
@@ -879,6 +847,13 @@ public:
         auto w = top_widget_->tree_find_input(x, y, true);
         if (w)
         {
+          // send through a down first
+
+          m.st = ui_event::TouchEventDown;
+          w->ui_touch_update(id);
+
+          m.st = ui_event::TouchEventMove;
+
           if (w->ui_touch_update(id))
           {
             m.current = w;
@@ -888,6 +863,7 @@ public:
 
         break;
       }
+
       case ui_event::TouchEventCancel:
       {
         if (m.current)
@@ -899,7 +875,7 @@ public:
       default:
         log_debug("Bad touch event");
     }
-  };
+  }
 
 
   bool incoming_scroll_wheel(double x_delta, double y_delta) noexcept
@@ -1158,7 +1134,7 @@ public:
   float zoom_{1.0};
   int widgets_active_{0};
 
-  std::unique_ptr<stencil> stencil_;
+  std::uint32_t stencil_state_{0};
   std::unique_ptr<scissor> scissor_;
 
   int ctx_ = 0;

@@ -51,22 +51,22 @@ public:
   {
     update_slider_played();
 
+    if (!viewer_->has_frame() || mouse_down_ || widget_menu_list_ || widget_about_) // do not fade out with these states
+      return;
+
     // after an amount of time of inactivity, fade this out
 
-    if (ui_event::now() - last_user_interaction_ > 5'000)
+    if (!fading_out_ && (ui_event::now() - last_user_interaction_ > 5'000))
     {
-      if (!mouse_down_ && !have_anim() && !widget_menu_list_ && !widget_about_)
+      auto fade_out = ui_event_destination::make_anim<anim_alpha>(
+                                            ui_, shared_from_this(), ui_anim::Dir::Reverse);
+
+      fade_out->set_end_cb([this] ()
       {
-        auto fade_out = ui_event_destination::make_anim<anim_alpha>(
-                                              ui_, shared_from_this(), ui_anim::Dir::Reverse);
+        disconnect_from_parent();
+      });
 
-        fade_out->set_end_cb([this] ()
-        {
-          disconnect_from_parent();
-        });
-
-        fading_out_ = true;
-      }
+      fading_out_ = true;
     }
 
     ui_->do_draw();
@@ -136,14 +136,14 @@ public:
 
     user_interacted();
 
-    if (m.id & ui_event::MouseButtonLeft)
+    if (!mouse_down_ && m.id)
     {
       mouse_down_ = true;
       viewer_->set_playing(false);
 
-      update_frame(m.pos.x);
+      update_frame(m.start_pos.x);
 
-      create_frame_num(m.pos.x);
+      create_frame_num(m.start_pos.x);
 
       return;
     }
@@ -170,6 +170,7 @@ public:
 
     user_interacted();
 
+    //if (m.st == ui_event::TouchEventDown || (!mouse_down_ && m.st == ui_event::TouchEventMove))
     if (m.st == ui_event::TouchEventDown)
     {
       mouse_down_ = true;
@@ -206,6 +207,7 @@ public:
   void update_status() noexcept // called by viewer if it has updated playing status
   {
     update_buttons();
+    user_interacted();
   }
 
 
@@ -220,7 +222,7 @@ private:
   
   void create_sliders() noexcept
   {
-    float spacing = coords_.height() / 10.0;
+    float spacing = coords_.height() / 11.0;
 
     int x_off = spacing * 2;
 
@@ -239,7 +241,7 @@ private:
 
   void update_positions() noexcept
   {
-    float spacing = coords_.height() / 10.0;
+    float spacing = coords_.height() / 11.0;
 
     int x_off = spacing * 2;
 
@@ -256,8 +258,8 @@ private:
 
     int sz = spacing * 6;
 
-    coords = { { coords_.p2.x - (2*x_off) - sz, coords_.p1.y + static_cast<int>(spacing) },
-               { coords_.p2.x, coords_.p1.y + static_cast<int>(spacing) + sz } };
+    coords = { { coords_.p2.x - (2*x_off) - sz, coords_.p1.y },
+               { coords_.p2.x, coords_.p1.y + static_cast<int>(2*spacing) + sz } };
 
     widget_menu_->set_geometry(coords);
   }
@@ -267,22 +269,30 @@ private:
   {
     auto [ current, count ] = viewer_->get_frame();
 
-    float spacing = coords_.height() / 10.0;
+    float spacing = coords_.height() / 11.0;
 
     int x_off = spacing * 2;
 
     int start_x = coords_.p1.x + x_off;
 
-    gpu::int_box coords = {{ start_x, static_cast<int>(coords_.p1.y + spacing   * 8.0f) },
-                           { start_x + static_cast<int>((coords_.width() - (x_off*2)) * ((current + 1) / count)), static_cast<int>(coords_.p1.y + spacing   * 9.0f) }};
+    if (count == 0)
+    {
+      widget_slider_played_->hide();
+    }
+    else
+    {
+      gpu::int_box coords = {{ start_x, static_cast<int>(coords_.p1.y + spacing   * 8.0f) },
+                             { start_x + static_cast<int>((coords_.width() - (x_off*2)) * ((current + 1) / count)), static_cast<int>(coords_.p1.y + spacing   * 9.0f) }};
 
-    widget_slider_played_->set_geometry(coords);
+      widget_slider_played_->set_geometry(coords);
+      widget_slider_played_->show();
+    }
   }
 
 
   void update_frame(int x_pos) noexcept
   {
-    float spacing = coords_.height() / 10.0;
+    float spacing = coords_.height() / 11.0;
 
     int x_off = spacing * 2;
 
@@ -298,7 +308,7 @@ private:
 
   void create_buttons() noexcept
   {
-    float top_spacing = coords_.height() / 10.0;
+    float top_spacing = coords_.height() / 11.0;
 
     int sz = top_spacing * 6;
       
@@ -306,8 +316,8 @@ private:
 
     // the actual width of each button is sz + 2 * x_off (x_off either side of sz to help touch)
 
-    gpu::int_box button_coords = { { coords_.p1.x, coords_.p1.y + static_cast<int>(top_spacing) },
-                                   { coords_.p1.x + (2*x_off) + sz, coords_.p1.y + static_cast<int>(top_spacing) + sz } };
+    gpu::int_box button_coords = { { coords_.p1.x, coords_.p1.y },
+                                   { coords_.p1.x + (2*x_off) + sz, coords_.p1.y + static_cast<int>(2*top_spacing) + sz } };
 
     float spacing = top_spacing * 6.0 / 5.0;
 
@@ -315,9 +325,9 @@ private:
 
     std::array<shader_basic::basic_vertex, 3> v_play =
     {{
-      {x_off + spacing * 1.0f, spacing * 1.0f, 0.0f, 1.0f},
-      {x_off + spacing * 1.0f, spacing * 4.0f, 0.0f, 1.0f},
-      {x_off + spacing * 4.0f, spacing * 2.5f, 0.0f, 1.0f}
+      {x_off + spacing * 1.0f, spacing * 2.0f, 0.0f, 1.0f},
+      {x_off + spacing * 1.0f, spacing * 5.0f, 0.0f, 1.0f},
+      {x_off + spacing * 4.0f, spacing * 3.5f, 0.0f, 1.0f}
     }};
 
     widget_play_ = ui_event_destination::make_ui<widget_basic_vertex>(ui_, button_coords,
@@ -334,21 +344,21 @@ private:
 
     std::array<shader_basic::basic_vertex, 12> v_pause =
     {{
-      {x_off + spacing * 1.0f, spacing * 1.0f, 0.0f, 1.0f},
-      {x_off + spacing * 1.0f, spacing * 4.0f, 0.0f, 1.0f},
-      {x_off + spacing * 2.0f, spacing * 1.0f, 0.0f, 1.0f},
+      {x_off + spacing * 1.0f, spacing * 2.0f, 0.0f, 1.0f},
+      {x_off + spacing * 1.0f, spacing * 5.0f, 0.0f, 1.0f},
+      {x_off + spacing * 2.0f, spacing * 2.0f, 0.0f, 1.0f},
 
-      {x_off + spacing * 2.0f, spacing * 1.0f, 0.0f, 1.0f},
-      {x_off + spacing * 1.0f, spacing * 4.0f, 0.0f, 1.0f},
-      {x_off + spacing * 2.0f, spacing * 4.0f, 0.0f, 1.0f},
+      {x_off + spacing * 2.0f, spacing * 2.0f, 0.0f, 1.0f},
+      {x_off + spacing * 1.0f, spacing * 5.0f, 0.0f, 1.0f},
+      {x_off + spacing * 2.0f, spacing * 5.0f, 0.0f, 1.0f},
 
-      {x_off + spacing * 3.0f, spacing * 1.0f, 0.0f, 1.0f},
-      {x_off + spacing * 3.0f, spacing * 4.0f, 0.0f, 1.0f},
-      {x_off + spacing * 4.0f, spacing * 1.0f, 0.0f, 1.0f},
+      {x_off + spacing * 3.0f, spacing * 2.0f, 0.0f, 1.0f},
+      {x_off + spacing * 3.0f, spacing * 5.0f, 0.0f, 1.0f},
+      {x_off + spacing * 4.0f, spacing * 2.0f, 0.0f, 1.0f},
 
-      {x_off + spacing * 4.0f, spacing * 1.0f, 0.0f, 1.0f},
-      {x_off + spacing * 3.0f, spacing * 4.0f, 0.0f, 1.0f},
-      {x_off + spacing * 4.0f, spacing * 4.0f, 0.0f, 1.0f}
+      {x_off + spacing * 4.0f, spacing * 2.0f, 0.0f, 1.0f},
+      {x_off + spacing * 3.0f, spacing * 5.0f, 0.0f, 1.0f},
+      {x_off + spacing * 4.0f, spacing * 5.0f, 0.0f, 1.0f}
     }};
 
     widget_pause_ = ui_event_destination::make_ui<widget_basic_vertex>(ui_, button_coords,
@@ -363,39 +373,39 @@ private:
 
     // menu
 
-    button_coords = { { coords_.p2.x - (2*x_off) - sz, coords_.p1.y + static_cast<int>(top_spacing) },
-                      { coords_.p2.x, coords_.p1.y + static_cast<int>(top_spacing) + sz } };
+    button_coords = { { coords_.p2.x - (2*x_off) - sz, coords_.p1.y },
+                      { coords_.p2.x, coords_.p1.y + static_cast<int>(2*top_spacing) + sz } };
 
     float height   = (spacing * 3.0f) / 4.0f;
     float height_2 = height / 2.0f;
 
     std::array<shader_basic::basic_vertex, 18> v_menu =
     {{
-      {x_off + spacing * 2.0f, (spacing * 1.0f), 0.0f, 1.0f},
-      {x_off + spacing * 2.0f, (spacing * 1.0f) + height, 0.0f, 1.0f},
-      {x_off + spacing * 3.0f, (spacing * 1.0f), 0.0f, 1.0f},
+      {x_off + spacing * 2.0f, (spacing * 2.0f), 0.0f, 1.0f},
+      {x_off + spacing * 2.0f, (spacing * 2.0f) + height, 0.0f, 1.0f},
+      {x_off + spacing * 3.0f, (spacing * 2.0f), 0.0f, 1.0f},
 
-      {x_off + spacing * 3.0f, (spacing * 1.0f), 0.0f, 1.0f},
-      {x_off + spacing * 2.0f, (spacing * 1.0f) + height, 0.0f, 1.0f},
-      {x_off + spacing * 3.0f, (spacing * 1.0f) + height, 0.0f, 1.0f},
-
-
-      {x_off + spacing * 2.0f, (spacing * 2.5f) - height_2, 0.0f, 1.0f},
-      {x_off + spacing * 2.0f, (spacing * 2.5f) + height_2, 0.0f, 1.0f},
-      {x_off + spacing * 3.0f, (spacing * 2.5f) - height_2, 0.0f, 1.0f},
-
-      {x_off + spacing * 3.0f, (spacing * 2.5f) - height_2, 0.0f, 1.0f},
-      {x_off + spacing * 2.0f, (spacing * 2.5f) + height_2, 0.0f, 1.0f},
-      {x_off + spacing * 3.0f, (spacing * 2.5f) + height_2, 0.0f, 1.0f},
+      {x_off + spacing * 3.0f, (spacing * 2.0f), 0.0f, 1.0f},
+      {x_off + spacing * 2.0f, (spacing * 2.0f) + height, 0.0f, 1.0f},
+      {x_off + spacing * 3.0f, (spacing * 2.0f) + height, 0.0f, 1.0f},
 
 
-      {x_off + spacing * 2.0f, (spacing * 4.0f) - height, 0.0f, 1.0f},
-      {x_off + spacing * 2.0f, (spacing * 4.0f), 0.0f, 1.0f},
-      {x_off + spacing * 3.0f, (spacing * 4.0f) - height, 0.0f, 1.0f},
+      {x_off + spacing * 2.0f, (spacing * 3.5f) - height_2, 0.0f, 1.0f},
+      {x_off + spacing * 2.0f, (spacing * 3.5f) + height_2, 0.0f, 1.0f},
+      {x_off + spacing * 3.0f, (spacing * 3.5f) - height_2, 0.0f, 1.0f},
 
-      {x_off + spacing * 3.0f, (spacing * 4.0f) - height, 0.0f, 1.0f},
-      {x_off + spacing * 2.0f, (spacing * 4.0f), 0.0f, 1.0f},
-      {x_off + spacing * 3.0f, (spacing * 4.0f), 0.0f, 1.0f},
+      {x_off + spacing * 3.0f, (spacing * 3.5f) - height_2, 0.0f, 1.0f},
+      {x_off + spacing * 2.0f, (spacing * 3.5f) + height_2, 0.0f, 1.0f},
+      {x_off + spacing * 3.0f, (spacing * 3.5f) + height_2, 0.0f, 1.0f},
+
+
+      {x_off + spacing * 2.0f, (spacing * 5.0f) - height, 0.0f, 1.0f},
+      {x_off + spacing * 2.0f, (spacing * 5.0f), 0.0f, 1.0f},
+      {x_off + spacing * 3.0f, (spacing * 5.0f) - height, 0.0f, 1.0f},
+
+      {x_off + spacing * 3.0f, (spacing * 5.0f) - height, 0.0f, 1.0f},
+      {x_off + spacing * 2.0f, (spacing * 5.0f), 0.0f, 1.0f},
+      {x_off + spacing * 3.0f, (spacing * 5.0f), 0.0f, 1.0f},
     }};
 
     widget_menu_ = ui_event_destination::make_ui<widget_basic_vertex>(ui_, button_coords,
@@ -436,7 +446,7 @@ private:
 
   void create_menu() noexcept
   {
-    if (widget_menu_list_)
+    if (widget_menu_list_ || widget_about_) // wait for these to die before allowing a new menu
       return;
 
     // shade screen
@@ -455,7 +465,7 @@ private:
     });
 
     auto fade_in = ui_event_destination::make_anim<anim_alpha>(
-       ui_, widget_menu_shade_, ui_anim::Dir::Forward, 0.4);
+       ui_, widget_menu_shade_, ui_anim::Dir::Forward, 0.3);
 
     // menu
 
@@ -499,7 +509,7 @@ private:
       {
         create_about();
 
-        auto merged = make_anim_merge(ui_, widget_menu_list_, widget_about_, ui_anim::Dir::Forward);
+        auto merged = make_anim_merge(ui_, widget_menu_list_, widget_about_);
 
         merged.second->set_end_cb([this, wself(weak_from_this())] ()
         {
@@ -517,7 +527,7 @@ private:
 
     });
 
-    auto merged = make_anim_merge(ui_, widget_menu_, widget_menu_list_, ui_anim::Dir::Forward);
+    auto merged = make_anim_merge(ui_, widget_menu_, widget_menu_list_);
   }
 
 
@@ -533,6 +543,8 @@ private:
       auto fade_out = ui_event_destination::make_anim<anim_alpha>(
           ui_, widget_menu_shade_, ui_anim::Dir::Reverse, 0.2);
 
+      widget_menu_shade_->set_passive();
+
       fade_out->set_end_cb([this, wself(weak_from_this())] ()
       {
         if (auto w = wself.lock())
@@ -545,7 +557,7 @@ private:
 
     if (widget_menu_list_)
     {
-      auto merged = make_anim_merge(ui_, widget_menu_list_, widget_menu_, ui_anim::Dir::Forward);
+      auto merged = make_anim_merge(ui_, widget_menu_list_, widget_menu_);
       widget_menu_->show();
 
       merged.second->set_end_cb([this, wself(weak_from_this())] ()
@@ -558,22 +570,6 @@ private:
           user_interacted();
         }
       });
-      /*
-      auto slide_out = ui_event_destination::make_anim<anim_projection>( ui_, widget_menu_list_,
-        anim_projection::Options::None, widget_menu_list_->my_width(), 0, 0, ui_anim::Dir::Reverse, 0.2);
-
-      slide_out->set_end_cb([this, wself(weak_from_this())] ()
-      {
-        if (auto w = wself.lock())
-        {
-          widget_menu_list_->disconnect_from_parent();
-          widget_menu_list_.reset();
-
-          widget_menu_->show();
-          user_interacted();
-        }
-      });
-      */
     }
   }
 
@@ -592,8 +588,12 @@ private:
       int width  = std::min(coords_.width(), static_cast<int>(200 * ui_->pixel_ratio_));
       int height = static_cast<int>(150 * ui_->pixel_ratio_);
 
-      gpu::int_box coords = { { coords_.p2.x - width, coords_.p1.y },
-                              { coords_.p2.x, coords_.p1.y + height } };
+      int start_y = coords_.p2.y + 10 * ui_->pixel_ratio_;
+      int border = 10 * ui_->pixel_ratio_;
+      int border2 = 2 * border;
+
+      gpu::int_box coords = { { coords_.p2.x - width - border2, start_y + border },
+                              { coords_.p2.x - border, start_y + height + border2 } };
 
       widget_menu_list_->set_geometry(coords);
     }
@@ -646,9 +646,6 @@ private:
     widget_about_ = ui_event_destination::make_ui<widget_text_box>(ui_, c, shared_from_this(),
           txt, ui_->txt_color_, bg_col, 0.6, 10 * ui_->pixel_ratio_);
 
-//    auto fade_in = ui_event_destination::make_anim<anim_alpha>(
-//       ui_, widget_about_, ui_anim::Dir::Forward, 0.2);
-
     widget_menu_shade_->set_click_cb([this] () // shade now controls about
     {
       delete_about();
@@ -668,6 +665,8 @@ private:
     auto fade_out = ui_event_destination::make_anim<anim_alpha>(
         ui_, widget_menu_shade_, ui_anim::Dir::Reverse, 0.2);
   
+    widget_menu_shade_->set_passive();
+
     fade_out->set_end_cb([this, wself(weak_from_this())] ()
     {
       if (auto w = wself.lock())
@@ -681,7 +680,7 @@ private:
 
     if (widget_about_)
     {
-      auto merged = make_anim_merge(ui_, widget_about_, widget_menu_, ui_anim::Dir::Forward);
+      auto merged = make_anim_merge(ui_, widget_about_, widget_menu_);
       widget_menu_->show();
 
       merged.second->set_end_cb([this, wself(weak_from_this())] ()
@@ -711,7 +710,7 @@ private:
 
     // make sure text displays within slider boundary
 
-    float spacing = coords_.height() / 10.0;
+    float spacing = coords_.height() / 11.0;
     int x_off = spacing * 2;
 
     auto [ x_shift, y_shift ] = widget_frame_num_->get_shifts();

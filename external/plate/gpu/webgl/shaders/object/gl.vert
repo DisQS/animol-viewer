@@ -7,6 +7,7 @@ uniform mat4 proj;
 uniform vec4 offset;
 uniform vec4 rot;
 uniform vec4 scale;
+uniform float alpha;
 
 varying highp vec4 out_color;
 varying highp vec4 out_normal;

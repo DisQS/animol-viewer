@@ -28,20 +28,26 @@ public:
   }
 
   
-  void display() noexcept
+  void display() noexcept override
 	{
     ui_->shader_basic_->draw(ui_->projection_, ui_->alpha_.alpha_, uniform_buffer_, vertex_buffer_);
   }
 
 
-  void set_geometry(const gpu::int_box& coords)
+  void set_geometry(const gpu::int_box& coords) noexcept
 	{
     ui_event_destination::set_geometry(coords);
     upload_vertex();
   }
 
 
-  void set_offset(const gpu::int_point& o)
+  void update_color_mode() noexcept override
+  {
+    upload_uniform();
+  }
+
+
+  void set_offset(const gpu::int_point& o) noexcept
   {
     offset_x_ = o.x;
     offset_y_ = o.y;
@@ -60,7 +66,7 @@ public:
   inline auto get_offset_y() const noexcept { return offset_y_; }
 
 
-  void update_color_alpha(float alpha)
+  void update_color_alpha(float alpha) noexcept
   {
     color_[0].a = alpha;
     color_[1].a = alpha;
@@ -69,14 +75,14 @@ public:
   }
 
 
-  void set_click_cb(std::function<void ()> cb)
+  void set_click_cb(std::function<void ()> cb) noexcept
   {
     set_input();
     click_cb_ = std::move(cb);
   }
 
 
-  void ui_mouse_button_update() noexcept
+  void ui_mouse_button_update() noexcept override
   {
     auto& m = ui_->mouse_metric_;
   
@@ -85,13 +91,13 @@ public:
   }
 
 
-  bool ui_mouse_position_update() noexcept
+  bool ui_mouse_position_update() noexcept override
   {
     return true;
   }
 
 
-  bool ui_touch_update(int id) noexcept
+  bool ui_touch_update(int id) noexcept override
   {
     auto& m = ui_->touch_metric_[id];
 
@@ -102,7 +108,7 @@ public:
   }
 
 
-  std::string_view name() const noexcept
+  std::string_view name() const noexcept override
   {
     return "box";
   }

@@ -28,22 +28,22 @@ public:
   
   void display() noexcept
 	{
-    ui_->stencil_->push();
+    stencil::push(&ui_->stencil_state_);
 
     for (auto& w : mask_->children_)
       w->tree_display();
     
-    ui_->stencil_->render();
+    stencil::render(&ui_->stencil_state_);
   }
 
   void undisplay() noexcept
 	{
-    ui_->stencil_->clear();
+    stencil::clear(&ui_->stencil_state_);
 
     for (auto& w : mask_->children_)
       w->tree_display();
 
-    ui_->stencil_->pop();
+    stencil::pop(&ui_->stencil_state_);
   }
 
 

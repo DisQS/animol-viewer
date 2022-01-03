@@ -24,7 +24,6 @@
 //#include "shaders/circle/shader.hpp"
 #include "shaders/rounded_box/shader.hpp"
 
-#include "stencil.hpp"
 #include "scissor.hpp"
 
 
@@ -82,7 +81,7 @@ EM_BOOL generate_frame(double now, void *userData)
 
       s->to_draw_ = false;
 
-      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT); // this happens by default
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
       if (s->pre_draw_)
         s->pre_draw_(current_frame_);
@@ -136,26 +135,21 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
   s->pixel_width_  = std::floor(s->viewport_width_  * s->pixel_ratio_);
   s->pixel_height_ = std::floor(s->viewport_height_ * s->pixel_ratio_);
 
-  s->stencil_ = std::make_unique<stencil>();
   s->scissor_ = std::make_unique<scissor>();
 
   log_debug(FMT_COMPILE("canvas: {} viewport: {} {} pixels: {} {} ratio: {}"), canvas_name, w, h,
                                               s->pixel_width_, s->pixel_height_, s->pixel_ratio_);
 
-//  emscripten_set_canvas_element_size(canvas_name.c_str(), s->pixel_width_, s->pixel_height_);
-//  js_set_dims((s->pixel_width_ / s->pixel_ratio_), (s->pixel_height_ / s->pixel_ratio_), canvas_name.data()+1, canvas_name.length()-1);
-
   EmscriptenWebGLContextAttributes ctxAttrs;
   emscripten_webgl_init_context_attributes(&ctxAttrs);
 
-  ctxAttrs.alpha                     = true;
+  ctxAttrs.alpha                     = false;
   ctxAttrs.depth                     = true;
   ctxAttrs.stencil                   = true;
   ctxAttrs.antialias                 = false;
   ctxAttrs.preserveDrawingBuffer     = false;
   ctxAttrs.powerPreference           = EM_WEBGL_POWER_PREFERENCE_HIGH_PERFORMANCE;
   ctxAttrs.enableExtensionsByDefault = true;
-  //ctxAttrs.enableExtensionsByDefault = false;
   ctxAttrs.failIfMajorPerformanceCaveat = false;
 
   // try and create a webgl2 context first
@@ -167,7 +161,7 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
 //  s->ctx_ = emscripten_webgl_create_context(canvas_name.c_str(), &ctxAttrs);
 //
 //  if (s->ctx_ <= 0) // unable to create w webgl2 context so try a webgl1 context
-//  {
+  {
     ctxAttrs.majorVersion = 1;
     s->ctx_ = emscripten_webgl_create_context(canvas_name.c_str(), &ctxAttrs);
     
@@ -177,7 +171,7 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
       s.reset();
       return s;
     }
-//  }
+  }
 
   emscripten_webgl_make_context_current(s->ctx_);
 
@@ -192,8 +186,11 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
 
   std::string version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
 
-  if (version.find(ES_VERSION_2_0) != std::string::npos) s->version_ = 1.0;
-  if (version.find(ES_VERSION_3_0) != std::string::npos) s->version_ = 2.0;
+  if (version.find(ES_VERSION_2_0) != std::string::npos)
+    s->version_ = 1.0;
+
+  if (version.find(ES_VERSION_3_0) != std::string::npos)
+    s->version_ = 2.0;
  
   log_debug(FMT_COMPILE("webgl context version: {} string: {}"), s->version_, version);
 
@@ -265,7 +262,7 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
   else
 	  glClearColor(1.0, 1.0, 1.0, 1.0);
 
-  s->set_focus();
+  //s->set_focus();
 
   return s;
 }
@@ -329,6 +326,8 @@ void arch_resize(plate::state* s)
   s->set_font_size(ui_event::get_font_size() / 20.0);
 
   s->do_reshape();
+
+  generate_frame();
 }
 
 

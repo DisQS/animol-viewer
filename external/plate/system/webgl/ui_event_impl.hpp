@@ -933,7 +933,7 @@ void f_color_mode_change(int mode)
   log_debug(FMT_COMPILE("Got c++ color mode change to: {}"), mode);
 
   for (auto& st : ui_event::states_)
-    st.s->set_darkmode(mode == 0 ? false : true);
+    st.s->set_darkmode(mode != 0);
 }
 
 void f_paste(std::string t)

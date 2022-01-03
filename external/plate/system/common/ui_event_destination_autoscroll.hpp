@@ -136,7 +136,10 @@ public:
   {
     auto& m = ui_->mouse_metric_;
 
-    if (m.id & ui_event::MouseButtonLeft)
+    if (mouse_down_ && m.id)
+      return;
+
+    if (m.id) // button down
     {
       mouse_down_ = true;
 
@@ -160,11 +163,8 @@ public:
         y_.mode  = anim_mode::STILL;
         y_.speed = 0;
       }
-
-      return;
     }
-
-    if (mouse_down_ && !(m.id & ui_event::MouseButtonLeft))
+    else // all buttons up
     {
       mouse_down_ = false;
 
@@ -221,8 +221,6 @@ public:
           }
         }
       }
-
-      return;
     }
   }
 

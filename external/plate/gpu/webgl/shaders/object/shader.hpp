@@ -69,6 +69,7 @@ public:
     uniform_offset_  = glGetUniformLocation(program_, "offset");
     uniform_rot_     = glGetUniformLocation(program_, "rot");
     uniform_scale_   = glGetUniformLocation(program_, "scale");
+    uniform_bg_color_= glGetUniformLocation(program_, "bg_color");
   }
 
 
@@ -100,13 +101,14 @@ public:
     uniform_offset_  = glGetUniformLocation(program_, "offset");
     uniform_rot_     = glGetUniformLocation(program_, "rot");
     uniform_scale_   = glGetUniformLocation(program_, "scale");
+    uniform_bg_color_= glGetUniformLocation(program_, "bg_color");
 
     return true;
   }
 
 
   template<class V>
-  void draw(const projection& p, buffer<ubo>& ubuf, const buffer<V>& vbuf)
+  void draw(const projection& p, const gpu::color& bg_color, buffer<ubo>& ubuf, const buffer<V>& vbuf)
   {
     auto u = ubuf.map_staging();
 
@@ -117,6 +119,7 @@ public:
     glUniform4f(uniform_offset_, u->offset.x, u->offset.y, u->offset.z, u->offset.w);
     glUniform4f(uniform_rot_,    u->rot.x, u->rot.y, u->rot.z, u->rot.w);
     glUniform4f(uniform_scale_,  u->scale.x, u->scale.y, u->scale.z, u->scale.w);
+    glUniform4f(uniform_bg_color_,  bg_color.r, bg_color.g, bg_color.b, bg_color.a);
 
     glBindBuffer(GL_ARRAY_BUFFER, vbuf.id_);
 
@@ -144,7 +147,7 @@ public:
 
 
   template<class V, class C>
-  void draw(const projection& p, buffer<ubo>& uniform_buffer, const buffer<V>& vbuf, const buffer<C>& cbuf)
+  void draw(const projection& p, const gpu::color& bg_color, buffer<ubo>& uniform_buffer, const buffer<V>& vbuf, const buffer<C>& cbuf)
   {
     auto u = uniform_buffer.map_staging();
 
@@ -155,6 +158,7 @@ public:
     glUniform4f(uniform_offset_, u->offset.x, u->offset.y, u->offset.z, u->offset.w);
     glUniform4f(uniform_rot_,    u->rot.x, u->rot.y, u->rot.z, u->rot.w);
     glUniform4f(uniform_scale_,  u->scale.x, u->scale.y, u->scale.z, u->scale.w);
+    glUniform4f(uniform_bg_color_,  bg_color.r, bg_color.g, bg_color.b, bg_color.a);
 
     glBindBuffer(GL_ARRAY_BUFFER, vbuf.id_);
 
@@ -242,6 +246,7 @@ private:
   GLint  uniform_offset_  = 0;
   GLint  uniform_rot_     = 0;
   GLint  uniform_scale_   = 0;
+  GLint  uniform_bg_color_= 0;
 
 }; // shader_object
 

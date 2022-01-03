@@ -101,21 +101,13 @@ public:
   {
     pre_display();
 
-    ui_->stencil_->push();
-
-    wbox_bg_->display();
-
-    ui_->stencil_->render();
-
-    wbox_bg_->display();
+    stencil s(&ui_->stencil_state_, wbox_bg_.get());
 
     if (wbox_selection_)
       wbox_selection_->display();
 
     ui_->shader_text_msdf_->draw(ui_->projection_, ui_->alpha_, uniform_buffer_, vertex_buffer_,
                 ui_->font_->texture_, text_color_[ui_->color_mode_], ui_->font_->get_atlas_width(), ui_->font_->get_atlas_height());
-
-    ui_->stencil_->pop();
   }
 
 
