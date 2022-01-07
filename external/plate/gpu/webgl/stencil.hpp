@@ -32,13 +32,11 @@ public:
     state_(state),
     w_(w)
   {
-    push(state_);
+    push_and_render(state_);
 
     w_->display();
 
     render(state_);
-
-    w_->display();
   }
 
 
@@ -60,6 +58,19 @@ public:
       glEnable(GL_STENCIL_TEST);
 
     glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    glStencilFunc(GL_EQUAL, *state - 1, 255);
+    glStencilOp(GL_KEEP, GL_INCR, GL_INCR);
+  }
+
+
+  static void push_and_render(std::uint32_t* state) noexcept // render into stencil and buffer at the same time
+  {
+    *state += 1;
+
+    if (*state == 1)
+      glEnable(GL_STENCIL_TEST);
+
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     glStencilFunc(GL_EQUAL, *state - 1, 255);
     glStencilOp(GL_KEEP, GL_INCR, GL_INCR);
   }

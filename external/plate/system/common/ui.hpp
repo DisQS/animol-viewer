@@ -134,6 +134,14 @@ public:
   }
 
 
+  inline void set_bg_color(std::array<gpu::color, 2>& c) noexcept
+  {
+    bg_color_ = c;
+
+    glClearColor(bg_color_[color_mode_].r, bg_color_[color_mode_].g, bg_color_[color_mode_].b, bg_color_[color_mode_].a);
+  }
+
+
   void set_pixel_ratio(double r) noexcept
   {
     prev_pixel_ratio_ = pixel_ratio_;
@@ -1098,7 +1106,9 @@ public:
 
   int color_mode_{0}; // 0 => light, 1 => dark
 
-  std::array<gpu::color, 2> bg_color_;        // background colors
+  std::array<gpu::color, 2> bg_color_ = { {{ 1.0f, 1.0f, 1.0f, 1.0f },
+                                           { 0.0f, 0.0f, 0.0f, 1.0f }} }; // background colors
+
   std::array<gpu::color, 2> bg_color_inv_;    // background colors inverted
   std::array<gpu::color, 2> txt_color_;       // txt colors
   std::array<gpu::color, 2> select_color_;    // selected colors

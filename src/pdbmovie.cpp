@@ -77,10 +77,12 @@ private:
     if (!s_)
       return;
 
-    // setup colors
+    // setup colors (index 0 is light, index 1 is dark)
 
-    s_->bg_color_[0] = { 1.0f, 1.0f, 1.0f, 1.0f };
-    s_->bg_color_[1] = { 0.0f, 0.0f, 0.0f, 1.0f };
+    std::array<plate::gpu::color, 2> bg = { {{ 1.0f, 1.0f, 1.0f, 1.0f },
+                                             { 0.0f, 0.0f, 0.0f, 1.0f }} };
+
+    s_->set_bg_color(bg);
 
     s_->bg_color_inv_[0] = s_->bg_color_[1];
     s_->bg_color_inv_[1] = s_->bg_color_[0];

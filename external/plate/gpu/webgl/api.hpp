@@ -230,7 +230,6 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
   s->shader_rounded_box_->check();
 
   s->projection_.set(s->pixel_width_, s->pixel_height_);
-  //glViewport(0, 0, gpu::viewport_width_, gpu::viewport_height_);
   glViewport(0, 0, s->pixel_width_, s->pixel_height_);
 
   glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
@@ -257,12 +256,10 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
           canvas_name, ui_event::DeviceType_string(device_type), ui_event::DeviceHasTouch_string(device_touch),
           s->is_darkmode(), s->get_font_size());
 
-  if (s->is_darkmode())
-    glClearColor(0.0, 0.0, 0.0, 1.0);
-  else
-	  glClearColor(1.0, 1.0, 1.0, 1.0);
-
-  //s->set_focus();
+  glClearColor(s->bg_color_[s->color_mode_].r,
+               s->bg_color_[s->color_mode_].g,
+               s->bg_color_[s->color_mode_].b,
+               s->bg_color_[s->color_mode_].a);
 
   return s;
 }

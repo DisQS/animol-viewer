@@ -255,13 +255,30 @@ private:
     url_         = url;
     description_ = description;
 
-    set_title();
-    set_loading();
-
     if (auto w = widget_control_.lock())
       w->update_status();
 
+    if (item_.ends_with(".pdb")) // no nedd for a movie.plan
+    {
+      pdb_list_.push_back(item_);
+      item_ = item_.substr(0, item_.size() - 4);
+
+      current_entry_ = 0;
+      store_.resize(1);
+
+      set_title();
+
+      log_debug("remote has: 1 frame");
+
+      generate_script();
+
+      return;
+    }
+
     // load in movie plan file
+
+    set_title();
+    set_loading();
 
     auto h = async::request(url_ + item_ + "/movie.plan", "GET", "", [this] (std::uint32_t handle, plate::data_store&& d)
     {
