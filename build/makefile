@@ -10,7 +10,7 @@ MOLSCRIPTPATH = ../external/molscript/code
 
 MOLAUTO_SRCS   = aa_lookup.c mol3d_init.c dynstring.c mol3d.c named_data.c colour.c element_lookup.c mol3d_secstruc.c mol3d_utils.c vector3.c str_utils.c io_utils.c key_value.c double_hash.c mol3d_io.c quaternion.c matrix3.c mol3d_chain.c hermite_curve.c indent.c extent3d.c args.c fast_atof.c
 
-MOLSCRIPT_SRCS = molscript.tab.c global.c lex.c col.c select.c state.c graphics.c segment.c coord.c xform.c vertex.c molauto.c
+MOLSCRIPT_SRCS = molscript.tab.c global.c lex.c col.c select.c state.c graphics.c segment.c coord.c xform.c vertex.c molauto.c ogl_body.c body3d.c
 
 MOLSCRIPTOUTPUT = output
 MOLCLIBOUTPUT   = output/clib
@@ -142,6 +142,12 @@ $(MOLSCRIPTOUTPUT)/vertex.o: $(MOLSCRIPTPATH)/vertex.c
 $(MOLSCRIPTOUTPUT)/molauto.o: $(MOLSCRIPTPATH)/molauto.c
 	mkdir -p $(MOLSCRIPTOUTPUT)
 	$(CC) $(EFLAGS) -I $(MOLSCRIPTPATH)/ -I $(MOLCLIBPATH)/ -o $@ -c $<
+$(MOLSCRIPTOUTPUT)/ogl_body.o: $(MOLCLIBPATH)/ogl_body.c
+	mkdir -p $(MOLSCRIPTOUTPUT)
+	$(CC) $(EFLAGS) -I $(MOLSCRIPTPATH)/ -I $(MOLCLIBPATH)/ -o $@ -c $<
+$(MOLSCRIPTOUTPUT)/body3d.o: $(MOLCLIBPATH)/body3d.c
+	mkdir -p $(MOLSCRIPTOUTPUT)
+	$(CC) $(EFLAGS) -I $(MOLSCRIPTPATH)/ -I $(MOLCLIBPATH)/ -o $@ -c $<
 
 .PHONY: default
 
@@ -153,7 +159,7 @@ install:
 	./install.sh $(server)
 
 decoder_worker.js: ../src/worker/decoder_worker.cpp $(MOLAUTO_OBJS) $(MOLSCRIPT_OBJS)
-	$(CC) $(CFLAGS) $(MOLAUTO_OBJS) $(MOLSCRIPT_OBJS) -s EXPORTED_FUNCTIONS="['_end_worker', '_script', '_script_with', '_decode_url_color_interleaved', '_decode_url_color_non_interleaved','_decode_url_no_color','_decode_contents_color_interleaved','_decode_contents_color_non_interleaved','_decode_contents_no_color']" -s BUILD_AS_WORKER=1 -s FILESYSTEM=1 -s FETCH=1 -s DISABLE_EXCEPTION_CATCHING=1 -s ALLOW_MEMORY_GROWTH=1 --bind --closure 1 -o decoder_worker.js ../src/worker/decoder_worker.cpp
+	$(CC) $(CFLAGS) $(MOLAUTO_OBJS) $(MOLSCRIPT_OBJS) -s EXPORTED_FUNCTIONS="['_visualise_atoms', '_visualise_atoms_url', '_end_worker', '_script', '_script_with', '_decode_url_color_interleaved', '_decode_url_color_non_interleaved','_decode_url_no_color','_decode_contents_color_interleaved','_decode_contents_color_non_interleaved','_decode_contents_no_color']" -s BUILD_AS_WORKER=1 -s FILESYSTEM=1 -s FETCH=1 -s DISABLE_EXCEPTION_CATCHING=1 -s ALLOW_MEMORY_GROWTH=1 --bind --closure 1 -o decoder_worker.js ../src/worker/decoder_worker.cpp
 
 clean:
 	rm -f $(NAME).js $(NAME).wasm

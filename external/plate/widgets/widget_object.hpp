@@ -7,6 +7,7 @@
 #include "../system/common/quaternion.hpp"
 #include "../system/common/ui_event_destination.hpp"
 #include "../gpu/shader_object.hpp"
+#include "../gpu/webgl/buffer.hpp"
 
 
 namespace plate {
@@ -92,6 +93,18 @@ public:
   }
 
 
+  inline float get_scale() const noexcept
+  {
+    return scale_;
+  }
+
+
+  inline quaternion get_direction() const noexcept
+  {
+    return direction_;
+  }
+
+
   void set_user_interacted_cb(std::function<void ()> cb) noexcept
   {
     interaction_cb_ = std::move(cb);
@@ -100,7 +113,7 @@ public:
 
   std::string_view name() const noexcept
   {
-    return "#object";
+    return "object";
   }
 
 

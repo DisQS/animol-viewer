@@ -295,6 +295,93 @@ bool have_file_system_access_support()
 }
 
 
+EM_JS(void, js_open_file_show_picker, (std::uint32_t cb),
+{
+  if (typeof window["Plate"]["files_handles"] === 'undefined')
+    window["Plate"]["files_handles"] = new Map();
+
+  const options =
+  {
+    types: [
+    {
+      description: 'proteins',
+      accept: {
+        'application/protein': ['.pdb']
+      }
+    },
+    ],
+
+    excludeAcceptAllOption: true,
+    multiple: true
+  };
+
+  window.showOpenFilePicker(options).then (handle =>
+  {
+    var files_list = ""; // string of files seperated by '\n'
+
+    handle.forEach(item =>
+    {
+      window["Plate"]["files_handles"].set(item.name, item);
+
+      files_list += item.name;
+      files_list += "\n";
+    });
+
+    window["Plate"]["f_open_file_show_picker_cb"](cb, files_list);
+
+  }).catch (e =>
+  {
+    window["Plate"]["f_open_file_show_picker_cb"](cb, "");
+  });
+
+});
+
+
+void open_file_show_picker(std::function<void (std::vector<std::string>&)> cb) noexcept
+{
+  auto f = new std::function(cb);
+
+  js_open_file_show_picker(reinterpret_cast<std::uint32_t>(f));
+}
+
+
+EM_JS(void, js_open_file_load_file, (const char* fname, int fname_len,std::uint32_t cb, std::uint32_t store),
+{
+  var j_fname = UTF8ToString(fname, fname_len);
+
+  var file_handle = window["Plate"]["files_handles"].get(j_fname);
+
+  if (file_handle === 'undefined')
+  {
+    window["Plate"]["f_directory_load_file_cb"](cb, store);
+    return;
+  }
+
+  file_handle.getFile().then (file =>
+  {
+    file.arrayBuffer().then (buff =>
+    {
+      var arr = window["Plate"]["f_get_memory"](store, buff.byteLength);
+
+      var u = new Uint8Array(buff);
+      arr.set(u);
+
+      window["Plate"]["f_directory_load_file_cb"](cb, store);
+    });
+  });
+});
+
+
+void open_file_load_file(std::string_view name, std::function<void (std::string&&)> cb) noexcept
+{
+  auto f = new std::function(cb);
+  auto s = new std::string();
+
+  js_open_file_load_file(name.data(), name.size(), reinterpret_cast<std::uint32_t>(f),
+                                                   reinterpret_cast<std::uint32_t>(s));
+}
+
+
 EM_JS(void, js_directory_show_picker, (const char* pattern, int pattern_len, std::uint32_t cb),
 {
   var w_pattern = UTF8ToString(pattern, pattern_len);
@@ -387,6 +474,12 @@ EM_JS(void, js_directory_load_file, (const char* dir, int dir_len, const char* f
 
 void directory_load_file(std::string_view dir, std::string_view name, std::function<void (std::string&&)> cb) noexcept
 {
+  if (dir == "") // must be file access
+  {
+    open_file_load_file(name, cb);
+    return;
+  }
+
   auto f = new std::function(cb);
   auto s = new std::string();
 
@@ -993,6 +1086,36 @@ void f_directory_load_file_cb(std::uint32_t cb, std::uint32_t store)
     delete s;
 }
 
+
+void f_open_file_show_picker_cb(std::uint32_t cb, std::string filelist)
+{
+  using namespace plate;
+
+  auto f = reinterpret_cast<std::function<void (std::vector<std::string>&)>*>(cb);
+
+  std::vector<std::string> files;
+
+  int start;
+  int end = 0;
+
+  while ((start = filelist.find_first_not_of('\n', end)) != std::string::npos)
+  {
+    end = filelist.find('\n', start);
+
+    if (end - start > 0)
+      files.push_back(filelist.substr(start, end - start));
+  }
+
+  std::sort(files.begin(), files.end());
+
+  if (f)
+  {
+    (*f)(files);
+    delete f;
+  }
+}
+
+
 emscripten::val f_get_memory(std::uint32_t store, int sz) // allocate amount of bytes to our string and return it as a javaxript typed array
 {
   auto s = reinterpret_cast<std::string*>(store);
@@ -1011,6 +1134,7 @@ EMSCRIPTEN_BINDINGS(plate)
   emscripten::function("f_paste", &f_paste);
   emscripten::function("f_directory_show_picker_cb", &f_directory_show_picker_cb);
   emscripten::function("f_directory_load_file_cb", &f_directory_load_file_cb);
+  emscripten::function("f_open_file_show_picker_cb", &f_open_file_show_picker_cb);
 
   emscripten::function("f_get_memory", &f_get_memory);
 }

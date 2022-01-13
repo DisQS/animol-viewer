@@ -4,7 +4,7 @@
 #include <emscripten/bind.h>
 #include <emscripten/fetch.h>
 
-//#include "../utils/mol.hpp"
+#include "visual.hpp"
 
 
 extern "C" {
@@ -65,8 +65,22 @@ void end_worker(char* data, int size)
 }
 
 
+/* default script generated is cartoon. for others create our script:
+
+title ""
+
+plot
+  read mol "/i.pdb";
+  transform atom * by centre position atom *;
+  set segments 8;
+  bonds atom *;
+end_plot
+
+*/
+
 void do_script()
 {
+  //const char *argv[] = { "molauto", "-cpk", "-out", "/i.script", "/i.pdb" }; // -stick
   const char *argv[] = { "molauto", "-out", "/i.script", "/i.pdb" };
   
   molauto(sizeof(argv) / sizeof(argv[0]), const_cast<char**>(argv));
@@ -236,6 +250,39 @@ void decode_contents_color_non_interleaved(char* data, int size)
 void decode_contents_no_color(char* data, int size)
 {
   decode_contents(data, size, 0);
+}
+
+
+// data is pdb file contents
+
+void visualise_atoms(char* data, int size)
+{
+  using namespace pdbmovie;
+
+  visualise v({data, static_cast<std::size_t>(size) });
+
+  std::vector<visualise::atom> res;
+
+  v.generate_atoms(res, visualise::ATOMS | visualise::SHIFT_TO_CENTER_OF_MASS);
+
+  emscripten_worker_respond(reinterpret_cast<char*>(res.data()), res.size() * sizeof(visualise::atom));
+}
+
+void visualise_atoms_url(char* data, int size)
+{
+  std::string url(data, size);
+
+  auto h = plate::async::request(url, "GET", "", [] (std::uint32_t handle, plate::data_store&& d)
+  {
+    visualise_atoms(reinterpret_cast<char*>(d.data()), d.size());
+
+  }, [] (std::uint32_t handle, int error_code, std::string error_msg)
+  {
+    log_debug(FMT_COMPILE("failed to download, error_code: {} msg: {}"), error_code, error_msg);
+
+    emscripten_worker_respond(nullptr, 0);
+  },
+  {});
 }
 
 

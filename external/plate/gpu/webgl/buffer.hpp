@@ -162,6 +162,18 @@ public:
   }
 
 
+  // get the size in bytes of the struct up to entry at position POS
+
+  template<int POS>
+  constexpr int get_size_in_bytes_up_to() const noexcept
+  {
+    if constexpr (POS == 0)
+      return 0;
+    else
+      return get_size_in_bytes<POS - 1>() + get_size_in_bytes_up_to<POS - 1>();
+  }
+
+
   int count_{0};
 
   unsigned int id_{0};

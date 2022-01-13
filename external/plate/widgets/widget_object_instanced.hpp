@@ -4,9 +4,10 @@
 #include <span>
 
 #include "../system/log.hpp"
+#include "../system/common/quaternion.hpp"
 #include "../system/common/ui_event_destination.hpp"
-#include "../gpu/shader_object_instanced.hpp"
-#include "../gpu/buffer.hpp"
+#include "../gpu/webgl/shaders/object_instanced/shader.hpp"
+#include "../gpu/webgl/buffer.hpp"
 
 
 namespace plate {
@@ -18,52 +19,82 @@ public:
 
   struct vert
   {
-    float position[4];
-    float normal[4];
-    float color[4];
+    std::array<short, 3> position;
+    std::array<short, 3> normal;
   };
 
   struct inst
   {
-    float offset[4];
-    float rot[4];
-    float scale[4];
+    std::array<short,        3> offset;
+    std::array<short,        1> scale;
+    std::array<std::uint8_t, 4> color;
   };
 
 
-  void init(const std::shared_ptr<state>& _ui) noexcept
+  void init(const std::shared_ptr<state>& _ui, const gpu::int_box& coords,
+                            const std::shared_ptr<ui_event_destination>& parent) noexcept
   {
-    ui_event_destination::init(_ui, Prop::Display);
+    ui_event_destination::init(_ui, coords, Prop::Display, parent);
+
+    direction_.set_to_default_angle();
+
+    upload_uniform();
   }
 
 
-  ~widget_object_instanced()
+  ~widget_object_instanced() noexcept
   {
-    if (vertex_array_object_) glDeleteVertexArrays(1, &vertex_array_object_);
+    if (vertex_array_object_)
+      glDeleteVertexArrays(1, &vertex_array_object_);
   }
 
 
-  void display()
+  void display() noexcept
 	{
-    ui_->shader_object_instanced_->draw(vertex_buffer_, instance_buffer_, &vertex_array_object_);
+    if (!vbuf_.is_ready() || !ibuf_.is_ready())
+      return;
+
+    glEnable(GL_DEPTH_TEST);
+
+    ui_->shader_object_instanced_->draw(ui_->projection_, ubuf_, vbuf_, ibuf_, &vertex_array_object_);
+
+    glDisable(GL_DEPTH_TEST);
   }
 
 
-  void set_vertex(std::span<std::byte> data)
+  void set_vertex(std::span<vert> data, int mode = GL_TRIANGLES) noexcept
 	{
-    vertex_buffer_.upload(data.data(), data.size() / sizeof(vert), sizeof(vert));
+    vbuf_.upload(data.data(), data.size(), mode);
   }
 
 
-  void set_instances(std::span<inst> data)
+  void set_instance(std::span<inst> data) noexcept
   {
-    instance_buffer_.upload(reinterpret_cast<std::byte*>(data.data()), data.size(), sizeof(inst));
+    ibuf_.upload(data.data(), data.size(), 0);
   }
 
 
-  void set_instances(std::span<std::byte> data)
-	{
-    instance_buffer_.upload(data.data(), data.size() / sizeof(inst), sizeof(inst));
+  void set_scale(float scale) noexcept
+  {
+    scale_ = scale;
+    upload_uniform();
+  }
+
+
+  void set_scale_and_direction(float scale, quaternion d) noexcept
+  {
+    scale_ = scale;
+    direction_ = d;
+
+    upload_uniform();
+  }
+
+
+  void set_geometry(const gpu::int_box& coords) noexcept
+  {
+    ui_event_destination::set_geometry(coords);
+  
+    upload_uniform();
   }
 
 
@@ -76,8 +107,29 @@ public:
 private:
 
 
-  buffer vertex_buffer_;
-  buffer instance_buffer_;
+  void upload_uniform()
+  {
+    auto u = ubuf_.allocate_staging(1);
+  
+    // assumes object is centred around 0,0,0
+
+    u->offset = { { my_width() / 2.0f }, { my_height() / 2.0f }, {0.0f}, {0.0f} };
+    u->scale = { {scale_}, {scale_}, {scale_}, {1.0f} };
+
+    direction_.get_euler_angles(u->rot.x, u->rot.y, u->rot.z);
+    u->rot.w = 0.0f;
+  
+    ubuf_.upload();
+  }
+
+
+  float scale_{1.0};
+  quaternion direction_;
+
+  buffer<shader_object_instanced::ubo> ubuf_;
+
+  buffer<vert> vbuf_;
+  buffer<inst> ibuf_;
 
   std::uint32_t vertex_array_object_{0};
 

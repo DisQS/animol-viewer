@@ -28,7 +28,7 @@ namespace plate {
 class shader_basic;
 //class shader_compute_template;
 class shader_object;
-//class shader_object_instanced;
+class shader_object_instanced;
 //class shader_text;
 class shader_text_msdf;
 class shader_texture;
@@ -1152,7 +1152,7 @@ public:
   shader_basic*                  shader_basic_                  = nullptr;
 //  shader_compute_template*       shader_compute_template_       = nullptr;
   shader_object*                 shader_object_                 = nullptr;
-//  shader_object_instanced*       shader_object_instanced_       = nullptr;
+  shader_object_instanced*       shader_object_instanced_       = nullptr;
 //  shader_text*                   shader_text_                   = nullptr;
   shader_text_msdf*              shader_text_msdf_              = nullptr;
   shader_texture*                shader_texture_                = nullptr;

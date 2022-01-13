@@ -9,6 +9,7 @@
 
 #include "widgets/widget_rounded_box.hpp"
 #include "widgets/widget_object.hpp"
+#include "widgets/widget_object_instanced.hpp"
 #include "widgets/widget_text.hpp"
 
 #include "widget_control.hpp"
@@ -75,6 +76,9 @@ public:
     if (current_entry_ < 0)
       return;
 
+    if (widget_object_instanced_)
+      widget_object_instanced_->set_scale_and_direction(widget_object_->get_scale(), widget_object_->get_direction());
+
     if (!playing_ || pdb_list_.size() <= 1)
       return;
 
@@ -105,6 +109,12 @@ public:
     {
       widget_object_->set_geometry(coords_);
       widget_object_->zoom(z);
+
+      if (widget_object_instanced_)
+      {
+        widget_object_instanced_->set_geometry(coords_);
+        widget_object_instanced_->set_scale_and_direction(widget_object_->get_scale(), widget_object_->get_direction());
+      }
     }
 
     if (auto w = widget_control_.lock(); w)
@@ -186,11 +196,23 @@ public:
 
   void show_load() noexcept
   {
-    ui_event::directory_show_picker(".*\\.pdb$", [this] (std::string dir_name, std::vector<std::string>& files)
+    ui_event::open_file_show_picker([this] (std::vector<std::string>& files)
     {
+      emscripten_webgl_make_context_current(ui_->ctx_);
+
+      log_debug(FMT_COMPILE("selected: ({}) {}"), files.size(), fmt::join(files, " "));
+
       if (files.size() > 0)
-        start_local(dir_name, files);
+        start_local("", files);
     });
+
+//    ui_event::directory_show_picker(".*\\.pdb$", [this] (std::string dir_name, std::vector<std::string>& files)
+//    {
+//      emscripten_webgl_make_context_current(ui_->ctx_);
+//
+//      if (files.size() > 0)
+//        start_local(dir_name, files);
+//    });
   }
 
 
@@ -233,6 +255,14 @@ public:
         set_frame(current_entry_ - 1);
         return;
       }
+
+      if (code_utf8 == "KeyP") // testing own visualisation
+      {
+        create_test_instanced();
+        return;
+      }
+
+      log_debug(FMT_COMPILE("ignored key: {}"), code_utf8);
     }
   }
 
@@ -378,6 +408,8 @@ private:
 
     worker_->set_path("/animol-viewer/version/1/decoder_worker.js");
 
+    // display_style_ = 1; // hack
+
     if (local_)
     {
       // load in file and then request the worker to generate the script
@@ -387,34 +419,44 @@ private:
         if (!worker_)
           return;
 
+        if (display_style_ == 1) // ball-and-stick
+        {
+          script_ = "title \"na\"\nplot\nread mol \"/i.pdb\";\ntransform atom * by centre position atom *;\nset colourparts on;\nset segments 8;\nball-and-stick atom *;\nend_plot\n";
+          get_first_frame(pdb);
+          return;
+        }
+        if (display_style_ == 2) // cpk
+        {
+          script_ = "title \"na\"\nplot\nread mol \"/i.pdb\";\ntransform atom * by centre position atom *;\nset colourparts on;\nset segments 8;\ncpk atom *;\nend_plot\n";
+          get_first_frame(pdb);
+          return;
+        }
+
+        // display_style_ == 0 // cartoon
+
         worker_->call("script_with", pdb, [this, self{shared_from_this()}, pdb] (std::span<char> d)
         {
           script_ = std::string(d.data(), d.size());
 
-          std::vector<char> data_to_send(4);
-
-          std::uint32_t script_size = script_.size();
-
-          std::memcpy(data_to_send.data(), &script_size, 4);
-
-          data_to_send.insert(data_to_send.end(), script_.begin(), script_.end());
-          data_to_send.insert(data_to_send.end(),     pdb.begin(),     pdb.end());
-
-          if (!worker_)
-            return;
-
-          worker_->call(SHARED_COLORS ? "decode_contents_color_non_interleaved" : "decode_contents_color_interleaved", data_to_send,
-            [this, self{shared_from_this()}] (std::span<char> d)
-          {
-            emscripten_webgl_make_context_current(ui_->ctx_);
-
-            process_main_frame(d);
-          });
+          get_first_frame(pdb);
         });
       });
     }
     else
     {
+      if (display_style_ == 1) // ball-and-stick
+      {
+        script_ = "title \"na\"\nplot\nread mol \"/i.pdb\";\ntransform atom * by centre position atom *;\nset colourparts on;\nset segments 8;\nball-and-stick atom *;\nend_plot\n";
+        get_first_frame();
+        return;
+      }
+      if (display_style_ == 2) // cpk
+      {
+        script_ = "title \"na\"\nplot\nread mol \"/i.pdb\";\ntransform atom * by centre position atom *;\nset colourparts on;\nset segments 8;\ncpk atom *;\nend_plot\n";
+        get_first_frame();
+        return;
+      }
+
       // request the worker to download the pdb file and generate the script
 
       std::string u = url_ + item_ + "/" + pdb_list_[current_entry_];
@@ -431,33 +473,59 @@ private:
   }
 
 
-  void get_first_frame() noexcept
+  void get_first_frame(std::string pdb = "") noexcept
   {
     // script has been generated, so run the decoder with the main frame,
     //
     // once the main frame has been generated, upload the script to all the workers and start processing the subsequent frames
 
-    std::string u = url_ + item_ + "/" + pdb_list_[current_entry_];
 
-    std::vector<char> data_to_send(4);
-
-    std::uint32_t script_size = script_.size();
-
-    std::memcpy(data_to_send.data(), &script_size, 4);
-
-    data_to_send.insert(data_to_send.end(), script_.begin(), script_.end());
-    data_to_send.insert(data_to_send.end(),       u.begin(),       u.end());
-
-    if (!worker_)
-      return;
-
-    worker_->call(SHARED_COLORS ? "decode_url_color_non_interleaved" : "decode_url_color_interleaved", data_to_send,
-      [this, self{shared_from_this()}] (std::span<char> d)
+    if (local_)
     {
-      emscripten_webgl_make_context_current(ui_->ctx_);
+      std::vector<char> data_to_send(4);
+        
+      std::uint32_t script_size = script_.size();
+        
+      std::memcpy(data_to_send.data(), &script_size, 4);
+        
+      data_to_send.insert(data_to_send.end(), script_.begin(), script_.end());
+      data_to_send.insert(data_to_send.end(),     pdb.begin(),     pdb.end());
+        
+      if (!worker_)
+        return;
+  
+      worker_->call(SHARED_COLORS ? "decode_contents_color_non_interleaved" : "decode_contents_color_interleaved", data_to_send,
+        [this, self{shared_from_this()}] (std::span<char> d)
+      {
+        emscripten_webgl_make_context_current(ui_->ctx_);
 
-      process_main_frame(d);
-    });
+        process_main_frame(d);
+      });
+    }
+    else // remote
+    {
+      std::string u = url_ + item_ + "/" + pdb_list_[current_entry_];
+
+      std::vector<char> data_to_send(4);
+
+      std::uint32_t script_size = script_.size();
+
+      std::memcpy(data_to_send.data(), &script_size, 4);
+
+      data_to_send.insert(data_to_send.end(), script_.begin(), script_.end());
+      data_to_send.insert(data_to_send.end(),       u.begin(),       u.end());
+
+      if (!worker_)
+        return;
+
+      worker_->call(SHARED_COLORS ? "decode_url_color_non_interleaved" : "decode_url_color_interleaved", data_to_send,
+        [this, self{shared_from_this()}] (std::span<char> d)
+      {
+        emscripten_webgl_make_context_current(ui_->ctx_);
+
+        process_main_frame(d);
+      });
+    }
   }
 
 
@@ -596,7 +664,6 @@ private:
       if (abs(v->position[2]) > max) max = abs(v->position[2]);
     }
 
-
     // values are int16 and so range from +/- 32'768
     //
     // to ensure it fits in the 'screen', calculate the minimum screen dimension, halve it to get the width and then scale
@@ -677,6 +744,12 @@ private:
     url_  = "";
 
     script_.clear();
+
+    if (widget_object_instanced_)
+    {
+      widget_object_instanced_->disconnect_from_parent();
+      widget_object_instanced_.reset();
+    }
 
     if (widget_object_)
     {
@@ -771,16 +844,232 @@ private:
       widget_control_ = ui_event_destination::make_ui<widget_control<widget_main>>(ui_, cc, shared_from_this(), this);
     }
   }
+
+
+  // temporary struct used in generate_sphere to create widget_object_instanced::verts
+  struct double_vert
+  {
+    std::array<double, 3> p; //position
+
+    static inline double radius{1.0};
+
+    operator widget_object_instanced::vert() const noexcept
+    {
+      const double normalf = 32767.0 / std::sqrt(p[0]*p[0] + p[1]*p[1] + p[2]*p[2]);
+      const double posf = radius / std::sqrt(p[0]*p[0] + p[1]*p[1] + p[2]*p[2]);
+
+      return widget_object_instanced::vert{{static_cast<short>(posf*p[0]), static_cast<short>(posf*p[1]), static_cast<short>(posf*p[2])}, {static_cast<short>(normalf*p[0]), static_cast<short>(normalf*p[1]), static_cast<short>(normalf*p[2])}};
+    }
+
+    double_vert operator+(const double_vert r) const noexcept
+    {
+      return double_vert{{p[0]+r.p[0],p[1]+r.p[1],p[2]+r.p[2]}};
+    } 
+
+    double_vert operator*(const double d) const noexcept
+    {
+      return double_vert{{p[0]*d, p[1]*d, p[2]*d}};
+    } 
+
+    double_vert operator/(const double d) const noexcept
+    {
+      return double_vert{{p[0]/d, p[1]/d, p[2]/d}};
+    } 
+
+    static void set_radius(const double r) noexcept
+    {
+      radius = r;
+    }
+  };
+
+
+  /*consteval*/ std::vector<widget_object_instanced::vert> generate_sphere(const double radius) noexcept
+  {
+    double_vert::set_radius(radius);
+
+    const/*expr*/ double phi    = ((1.0 + std::sqrt(5.0))/2.0);
+    const/*expr*/ double factor = std::sqrt(phi + 2.0);
+
+    // normals
+    const/*expr*/ double pa = 32767.0 * 1.0 / factor;
+    const/*expr*/ double pb = 32767.0 * phi / factor;
+    const/*expr*/ double ma = -pa;
+    const/*expr*/ double mb = -pb;
+
+    // positions
+    const/*expr*/ double pA = radius * 1.0 / factor;
+    const/*expr*/ double pB = radius * phi / factor;
+    const/*expr*/ double mA = -pA;
+    const/*expr*/ double mB = -pB;
+
+    /*const/expr/ std::vector<double_vert> p = {{
+      {{ 0, pA, pB}, { 0, pa, pb}}, {{ 0, pA, mB}, { 0, pa, mb}}, {{ 0, mA, pB}, { 0, ma, pb}}, {{ 0, mA, mB}, { 0, ma, mb}},
+      {{pA, pB,  0}, {pa, pb,  0}}, {{pA, mB,  0}, {pa, mb,  0}}, {{mA, pB,  0}, {ma, pb,  0}}, {{mA, mB,  0} ,{ma, mb,  0}},
+      {{pB,  0, pA}, {pb,  0, pa}}, {{mB,  0, pA}, {mb,  0, pa}}, {{pB,  0, mA}, {pb,  0, ma}}, {{mB,  0, mA}, {mb,  0, ma}}
+    }};*/
+
+    const/*expr*/ std::vector<double_vert> p = {{
+      {{ 0, pA, pB}}, {{ 0, pA, mB}}, {{ 0, mA, pB}}, {{ 0, mA, mB}},
+      {{pA, pB,  0}}, {{pA, mB,  0}}, {{mA, pB,  0}}, {{mA, mB,  0}},
+      {{pB,  0, pA}}, {{mB,  0, pA}}, {{pB,  0, mA}}, {{mB,  0, mA}}
+    }};
+
+    /*std::vector<widget_object_instanced::vert> triangles = {{
+      {p[0]}, {p[1]}, {p[2]}
+    }};*/
+
+    const/*expr*/ std::vector<std::uint32_t> indexes = {{
+      0, 4, 6,  1, 4, 6,                     // top 2
+      0, 4, 8,  1, 4,10,  0, 6, 9,  1, 6,11, // next 4
+
+      4, 8,10,  5, 8,10,  6, 9,11,  7, 9,11, // 2 vertical diamonds
+
+      0, 2, 8,  0, 2, 9,  1, 3,10,  1, 3,11, // 2 horizontal diamonds
+      
+      2, 5, 8,  3, 5,10,  2, 7, 9,  3, 7,11, // 4 connected to bottom 2
+      2, 5, 7,  3, 5, 7                      // bottom 2 
+    }};
+
+    std::vector<widget_object_instanced::vert> triangles;
+    
+    triangles.reserve(5 * p.size());
+
+    //for (const auto i : indexes)
+    //  triangles.emplace_back(static_cast<widget_object_instanced::vert>(p[i]));
+
+    for (std::uint32_t i = 0; i < indexes.size(); i+=3)
+    {
+      auto p0 = p[indexes[i]];
+      auto p1 = p[indexes[i+1]];
+      auto p2 = p[indexes[i+2]];
+
+      // number of triangles in sphere is 20*split^2
+      std::uint32_t split = 3;
+
+      for (std::uint32_t i = 0; i < split; i++)
+      {
+        triangles.emplace_back(static_cast<widget_object_instanced::vert>(( p0*(split-i  )      + p2*i     )/split));
+        triangles.emplace_back(static_cast<widget_object_instanced::vert>(( p0*(split-i-1) + p1 + p2*i     )/split));
+        triangles.emplace_back(static_cast<widget_object_instanced::vert>(( p0*(split-i-1)      + p2*(i+1) )/split));
+        
+        for (std::uint32_t j = 1; j < split - i; j++)
+        {
+          triangles.emplace_back(static_cast<widget_object_instanced::vert>(( p0*(split-i-j)   + p1*j     + p2*i     )/split));
+          triangles.emplace_back(static_cast<widget_object_instanced::vert>(( p0*(split-i-1-j) + p1*j     + p2*(i+1) )/split));
+          triangles.emplace_back(static_cast<widget_object_instanced::vert>(( p0*(split-i-j)   + p1*(j-1) + p2*(i+1) )/split));
+
+          triangles.emplace_back(static_cast<widget_object_instanced::vert>(( p0*(split-i-j)   + p1*j     + p2*i     )/split));
+          triangles.emplace_back(static_cast<widget_object_instanced::vert>(( p0*(split-i-1-j) + p1*(j+1) + p2*i     )/split));
+          triangles.emplace_back(static_cast<widget_object_instanced::vert>(( p0*(split-i-1-j) + p1*j     + p2*(i+1) )/split));
+        }
+      }
+
+      /*triangles.emplace_back(static_cast<widget_object_instanced::vert>(p0));
+      triangles.emplace_back(static_cast<widget_object_instanced::vert>((p0+p1)/2));
+      triangles.emplace_back(static_cast<widget_object_instanced::vert>((p0+p2)/2));
+
+      triangles.emplace_back(static_cast<widget_object_instanced::vert>((p0+p2)/2));
+      triangles.emplace_back(static_cast<widget_object_instanced::vert>((p0+p1)/2));
+      triangles.emplace_back(static_cast<widget_object_instanced::vert>((p1+p2)/2));
+
+      triangles.emplace_back(static_cast<widget_object_instanced::vert>((p0+p1)/2));
+      triangles.emplace_back(static_cast<widget_object_instanced::vert>(p1));
+      triangles.emplace_back(static_cast<widget_object_instanced::vert>((p1+p2)/2));
+
+      triangles.emplace_back(static_cast<widget_object_instanced::vert>((p0+p2)/2));
+      triangles.emplace_back(static_cast<widget_object_instanced::vert>((p1+p2)/2));
+      triangles.emplace_back(static_cast<widget_object_instanced::vert>(p2));*/
+
+      //triangles.emplace_back(static_cast<widget_object_instanced::vert>(p0));
+      //triangles.emplace_back(static_cast<widget_object_instanced::vert>(p1));
+      //triangles.emplace_back(static_cast<widget_object_instanced::vert>(p2));
+    }
+
+
+    return triangles;
+  }
+
+
+  void create_test_instanced() noexcept
+  {
+    if (pdb_list_.empty() || widget_object_instanced_)
+      return;
+
+    widget_object_instanced_ = ui_event_destination::make_ui<widget_object_instanced>(ui_, coords_, widget_object_);
+
+    auto v = generate_sphere(50.0);
+    /*std::vector<widget_object_instanced::vert> v = {{
+      {{ -50, -50, 0 }, { 0, 1, 0 }},
+      {{ -50,  50, 0 }, { 0, 1, 0 }},
+      {{  50, -50, 0 }, { 32767, 0, 0 }},
+      {{   0,   0, 71}, { 0, 1, 0 }},
+      {{ -50,  50, 0 }, { 0, 1, 0 }},
+      {{  50, -50, 0 }, { 0, 1, 0 }}
+    }};*/
+
+
+    widget_object_instanced_->set_vertex(v, GL_TRIANGLES);
+
+/*
+    std::array<widget_object_instanced::inst, 4> i = {{
+      {{    0, 0, 0 }, { 100 }, { 255,   0,   0, 255 }},
+      {{ 1000, 0, 0 }, { 110 }, {   0, 255,   0, 255 }},
+      {{ 2000, 0, 0 }, { 120 }, {   0,   0, 255, 255 }},
+      {{ 3000, 0, 0 }, { 130 }, { 128, 128, 128, 255 }}
+    }};
+
+    widget_object_instanced_->set_instance(i);
+*/
+
+    widget_object_instanced_->set_scale_and_direction(widget_object_->get_scale(), widget_object_->get_direction());
+
+    if (local_)
+    {
+      ui_event::directory_load_file(item_, pdb_list_[0], [this, self{shared_from_this()}] (std::string&& pdb)
+      {
+        worker_->call("visualise_atoms", pdb, [this, self{shared_from_this()}] (std::span<char> d)
+        {
+          emscripten_webgl_make_context_current(ui_->ctx_);
+
+          std::span<widget_object_instanced::inst> s(reinterpret_cast<widget_object_instanced::inst*>(d.data()),
+                                                    d.size() / sizeof(widget_object_instanced::inst));
+
+          log_debug(FMT_COMPILE("received: {} atoms"), s.size());
+
+          widget_object_instanced_->set_instance(s);
+        });
+      });
+    }
+    else // remote
+    {
+      std::string u = url_ + item_ + "/" + pdb_list_[0];
+
+      worker_->call("visualise_atoms_url", u, [this, self{shared_from_this()}] (std::span<char> d)
+      {
+        emscripten_webgl_make_context_current(ui_->ctx_);
+
+        std::span<widget_object_instanced::inst> s(reinterpret_cast<widget_object_instanced::inst*>(d.data()),
+                                                   d.size() / sizeof(widget_object_instanced::inst));
+
+        log_debug(FMT_COMPILE("received: {} atoms"), s.size());
+
+        widget_object_instanced_->set_instance(s);
+      });
+    }
+  }
   
 
   std::shared_ptr<plate::widget_text>         widget_title_;
   std::shared_ptr<plate::widget_text>         widget_loading_;
 
   std::shared_ptr<plate::widget_object<vert, cols>> widget_object_;
+  std::shared_ptr<plate::widget_object_instanced>   widget_object_instanced_;
 
   std::weak_ptr<widget_control<widget_main>> widget_control_;
 
   bool playing_{true};
+
+  int display_style_{0};
 
   struct frame
   {

@@ -26,11 +26,29 @@ to do:
 #include <stdio.h>
 #include <math.h>
 
-#include <GL/gl.h>
+//#include <GL/gl.h>
 
 #include <angle.h>
 #include <body3d.h>
-#include <ogl_bitmap_character.h>
+//#include <ogl_bitmap_character.h>
+
+// ugh
+
+#define GL_POINTS         0x0000
+#define GL_LINES          0x0001
+#define GL_LINE_LOOP      0x0002
+#define GL_LINE_STRIP     0x0003
+#define GL_TRIANGLES      0x0004
+#define GL_TRIANGLE_STRIP 0x0005
+#define GL_TRIANGLE_FAN   0x0006
+#define GL_QUADS          0x0007
+#define GL_QUAD_STRIP     0x0008
+#define GL_POLYGON        0x0009
+
+extern void glNormal3d(float n0, float n1, float n2);
+extern void glBegin(int t);
+extern void glEnd();
+extern void glVertex3d(float n0, float n1, float n2);
 
 
 /*============================================================*/
@@ -746,7 +764,7 @@ ogl_icosahedron_vertices (vector3 *pos, double radius)
     point++;
   }
   glEnd();
-
+/*
   glPixelStorei (GL_UNPACK_ALIGNMENT, 1);
   for (slot = 0; slot < 12; slot++) {
     sprintf (label, "%2i", slot);
@@ -755,6 +773,7 @@ ogl_icosahedron_vertices (vector3 *pos, double radius)
 		   icosahedron[slot].z);
     ogl_bitmap_string (GLUT_BITMAP_HELVETICA_18, label);
   }
+  */
 }
 
 

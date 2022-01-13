@@ -18,7 +18,7 @@
 #include "select.h"
 
 
-#define MAX_VERTEX 250000
+#define MAX_VERTEX 1000000
 
 
 /*============================================================*/
@@ -92,6 +92,13 @@ static int counter_   = 0;
 static int counter_s_ = 0;
 
 static int strip_counter_ = 0;
+static int fan_counter_   = 0;
+
+static float fan_start_[3]; // start point used to convert fan to individual triangles..
+static float fan_prev_[3];  // previous point
+
+static short fan_start_normal_[3];
+static short fan_prev_normal_[3];
 
 static short current_normal_[3];
 
@@ -281,6 +288,7 @@ void glBegin(int t)
 
   out_mode_ = t;
   strip_counter_ = 0;
+  fan_counter_   = 0;
 }
 
 
@@ -290,6 +298,7 @@ void glEnd()
     printf("bad strip_counter: %d\n", strip_counter_);
 
   strip_counter_ = 0;
+  fan_counter_   = 0;
 }
 
 
@@ -379,6 +388,7 @@ void glVertex3d(float n0, float n1, float n2)
     }
 
     case GL_TRIANGLE_STRIP:
+    case GL_QUAD_STRIP:
     {
       if (counter_s_ + 2 >= MAX_VERTEX)
         printf("past counter_s: %d\n", counter_s_);
@@ -419,6 +429,99 @@ void glVertex3d(float n0, float n1, float n2)
 
       return;
     }
+
+    case GL_TRIANGLE_FAN:
+    {
+      if (fan_counter_ == 0)
+      {
+        fan_start_[0] = n0;
+        fan_start_[1] = n1;
+        fan_start_[2] = n2;
+        fan_start_normal_[0] = current_normal_[0];
+        fan_start_normal_[1] = current_normal_[1];
+        fan_start_normal_[2] = current_normal_[2];
+
+        ++fan_counter_;
+        return;
+      }
+
+      if (fan_counter_ >= 2)
+      {
+        if (counter_ + 3 >= MAX_VERTEX)
+        {
+          printf("past counter: %d\n", counter_);
+          return;
+        }
+       
+        store_[counter_].vert[0] = to_short(fan_start_[0]);
+        store_[counter_].vert[1] = to_short(fan_start_[1]);
+        store_[counter_].vert[2] = to_short(fan_start_[2]);
+
+        store_[counter_].norm[0] = fan_start_normal_[0];
+        store_[counter_].norm[1] = fan_start_normal_[1];
+        store_[counter_].norm[2] = fan_start_normal_[2];
+
+        store_[counter_].col[0] = current_colour_s_[0];
+        store_[counter_].col[1] = current_colour_s_[1];
+        store_[counter_].col[2] = current_colour_s_[2];
+        store_[counter_].col[3] = current_colour_s_[3];
+
+        ++counter_;
+
+        store_[counter_].vert[0] = to_short(fan_prev_[0]);
+        store_[counter_].vert[1] = to_short(fan_prev_[1]);
+        store_[counter_].vert[2] = to_short(fan_prev_[2]);
+
+        store_[counter_].norm[0] = fan_prev_normal_[0];
+        store_[counter_].norm[1] = fan_prev_normal_[1];
+        store_[counter_].norm[2] = fan_prev_normal_[2];
+
+        store_[counter_].col[0] = current_colour_s_[0];
+        store_[counter_].col[1] = current_colour_s_[1];
+        store_[counter_].col[2] = current_colour_s_[2];
+        store_[counter_].col[3] = current_colour_s_[3];
+
+        ++counter_;
+
+        store_[counter_].vert[0] = to_short(n0);
+        store_[counter_].vert[1] = to_short(n1);
+        store_[counter_].vert[2] = to_short(n2);
+
+        store_[counter_].norm[0] = current_normal_[0];
+        store_[counter_].norm[1] = current_normal_[1];
+        store_[counter_].norm[2] = current_normal_[2];
+
+        store_[counter_].col[0] = current_colour_s_[0];
+        store_[counter_].col[1] = current_colour_s_[1];
+        store_[counter_].col[2] = current_colour_s_[2];
+        store_[counter_].col[3] = current_colour_s_[3];
+
+        ++counter_;
+      }
+
+      fan_prev_[0] = n0;
+      fan_prev_[1] = n1;
+      fan_prev_[2] = n2;
+      fan_prev_normal_[0] = current_normal_[0];
+      fan_prev_normal_[1] = current_normal_[1];
+      fan_prev_normal_[2] = current_normal_[2];
+
+      ++fan_counter_;
+      return;
+    }
+
+/*
+    case GL_QUAD_STRIP:
+    {
+      if (counter_s_ + 2 >= MAX_VERTEX)
+      {
+        printf("past counter_s: %d\n", counter_s_);
+        return;
+      }
+
+
+    }
+    */
 
     default:
       printf("Bad out_mode: %d\n", out_mode_);
@@ -692,6 +795,7 @@ void vertex_cylinder (vector3 *v1, vector3 *v2)
 
   set_colour_property (&(current_state->planecolour));
   //ogl_cylinder_faces (v1, v2, current_state->cylinderradius, segments, TRUE);
+  ogl_cylinder_faces (v1, v2, current_state->cylinderradius, segments - 2, TRUE);
 }
 
 
@@ -854,6 +958,7 @@ vertex_sphere (at3d *at, double radius)
 
   set_colour_property (&(at->colour));
   //ogl_sphere_faces_globe (&(at->xyz), radius, 2 * current_state->segments);
+  ogl_sphere_faces_globe (&(at->xyz), radius, current_state->segments - 2);
 }
 
 
@@ -871,6 +976,7 @@ vertex_stick (vector3 *v1, vector3 *v2, double r1, double r2, colour *c)
     set_colour_property (&(current_state->planecolour));
   }
   //ogl_cylinder_faces (v1, v2, current_state->stickradius, current_state->segments + 5, FALSE);
+  ogl_cylinder_faces (v1, v2, current_state->stickradius, current_state->segments, FALSE);
 }
 
 

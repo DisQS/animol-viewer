@@ -1,39 +1,56 @@
-attribute vec4 position;
-attribute vec4 normal;
-attribute vec4 color;
-attribute vec4 offset;
-attribute vec4 rot;
-attribute vec4 scale;
+attribute vec3 position;
+attribute vec3 normal;
+
+attribute vec3  offset;
+attribute float scale;
+attribute vec4  color;
 
 uniform mat4 proj;
+
+uniform vec4 uoffset;
+uniform vec4 urot;
+uniform vec4 uscale;
 
 varying highp vec4 out_color;
 varying highp vec4 out_normal;
 
 void main()
 {
-  highp float sin_x = sin(rot.x);
-  highp float cos_x = cos(rot.x);
-  highp float sin_y = sin(rot.y);
-  highp float cos_y = cos(rot.y);
-  highp float sin_z = sin(rot.z);
-  highp float cos_z = cos(rot.z);
+  // uniform
 
-  mat4 a_rot = mat4(cos_y * cos_z, cos_y * sin_z, -sin_y,   0,
-                    cos_z * sin_x * sin_y - cos_x * sin_z, cos_x * cos_z + sin_x * sin_y * sin_z, cos_y * sin_x, 0,
-                    cos_x * cos_z * sin_y + sin_x * sin_z, cos_x * sin_y * sin_z - cos_z * sin_x, cos_x * cos_y, 0,
+  highp float usin_x = sin(urot.x);
+  highp float ucos_x = cos(urot.x);
+  highp float usin_y = sin(urot.y);
+  highp float ucos_y = cos(urot.y);
+  highp float usin_z = sin(urot.z);
+  highp float ucos_z = cos(urot.z);
+
+  mat4 u_rot = mat4(ucos_y * ucos_z, ucos_y * usin_z, -usin_y,   0,
+                    ucos_z * usin_x * usin_y - ucos_x * usin_z, ucos_x * ucos_z + usin_x * usin_y * usin_z, ucos_y * usin_x, 0,
+                    ucos_x * ucos_z * usin_y + usin_x * usin_z, ucos_x * usin_y * usin_z - ucos_z * usin_x, ucos_x * ucos_y, 0,
                     0, 0, 0, 1 );
 
-  mat4 a_scale = mat4(scale.x, 0.0, 0.0, 0.0,
-                      0.0, scale.y, 0.0, 0.0,
-                      0.0, 0.0, scale.z, 0.0,
-                      0.0, 0.0, 0.0, scale.w);
+  mat4 u_scale = mat4(uscale.x, 0.0, 0.0, 0.0,
+                      0.0, uscale.y, 0.0, 0.0,
+                      0.0, 0.0, uscale.z, 0.0,
+                      0.0, 0.0, 0.0, uscale.w);
 
-  out_normal = a_rot * normal;
+  // attribute
 
-  vec4 t = a_rot * position;
+  highp float s = scale / 100.0;
 
-  gl_Position = proj * ((a_scale * t) + offset);
+  mat4 a_scale = mat4(  s, 0.0, 0.0, 0.0,
+                      0.0,   s, 0.0, 0.0,
+                      0.0, 0.0,   s, 0.0,
+                      0.0, 0.0, 0.0, 1.0);
+
+  // apply transforms
+
+  out_normal = u_rot * vec4(normal, 1.0);
+
+  vec4 t = (a_scale * vec4(position, 1.0)) + vec4(offset, 0.0);
+
+  gl_Position = proj * ((u_scale * (u_rot * t)) + uoffset);
 
   out_color = color;
 }
