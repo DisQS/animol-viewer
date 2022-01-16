@@ -60,7 +60,7 @@ public:
       if ((options & ATOMS) && line.starts_with("ATOM "))
         add_atom(d, line, options);
 
-      if ((options & HETATOMS) && line.starts_with("HETATM "))
+      if ((options & HETATOMS) && line.starts_with("HETATM"))
         add_atom(d, line, options);
     }
   }

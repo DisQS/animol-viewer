@@ -13,14 +13,22 @@ class anim
 public:
 
 
-  enum Style { SoftSoft, SoftHard, HardSoft, HoldSoftSoft };
+  enum Style { LogisticMedium };
 
 
   struct targets
   {
-    int* v;
-    int from;
-    int to;
+    float* v;
+    float from;
+    float to;
+
+
+    targets(float* v, float from, float to) noexcept :
+      v(v),
+      from(from),
+      to(to)
+    {
+    }
   };
 
   int add(std::vector<targets>&& t, int style, float total_time, std::function<void ()> on_change_cb = nullptr,
@@ -117,15 +125,25 @@ private:
 
     switch (e.style)
     {
-      case Style::SoftSoft:
+      case Style::LogisticMedium:
+      {
+        // see https://www.desmos.com/calculator/ieqvddyt8f for function
 
-        // slow, fast, slow based on sin(-PI/2) -> sin(PI/2)
-  
-        if (f < 0.5)
-          return (float)(sin(f * M_PI - (M_PI/2.0)) + 1) / 2.0;
-        else
-          return 0.5 + (float)sin(f * M_PI - (M_PI/2.0)) / 2.0;
+        constexpr float factor = 6.7f; // higher for sharper transition
 
+        auto logistic = [&factor] (float f)
+        {
+          return 1.0f/(1.0f + std::exp(-factor*(f-0.5f)));
+        };
+
+        /*constexpr*/ float offset = logistic(0); // shift to get result of 0 when f is 0
+
+        /*constexpr*/ float stretch = logistic(1) - offset; // stretch to get result of 1 when f is 1
+
+        return (logistic(f) - offset) / stretch;
+      }
+
+/*
       case Style::HoldSoftSoft:
 
         // hold, then as SoftSoft
@@ -140,6 +158,9 @@ private:
           else
             return 0.5 + (float)sin(f * M_PI - (M_PI/2.0)) / 2.0;
         }
+        */
+      default:
+        ;
       }
 
     return f;

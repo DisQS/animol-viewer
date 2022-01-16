@@ -12,15 +12,17 @@ void main()
   //highp float diffuse = max(dot(out_normal/sqrt(out_normal.x*out_normal.x + out_normal.y*out_normal.y + out_normal.z*out_normal.z), light), 0.4);
 
   //approximation of perfect interpolation using first order taylor expansion of square root at 1.0
-  highp float diffuse = max(dot(out_normal/(0.5+(out_normal.x*out_normal.x + out_normal.y*out_normal.y + out_normal.z*out_normal.z)/2.0), light), 0.0);
+  //highp float diffuse = max(dot(out_normal/(0.5+(out_normal.x*out_normal.x + out_normal.y*out_normal.y + out_normal.z*out_normal.z)/2.0), light), 0.0);
+  highp float diffuse = dot(out_normal, light)/(0.5+dot(out_normal.xyz, out_normal.xyz)/2.0);
 
-
+  // discard if facing backwards
 	if (diffuse <= 0.0)
 	{
 		discard;
 	}
 
-	diffuse = 1.0 - 0.8 * (1.0 - diffuse);
+  // use range 0.2-1.0 instead of 0.0-1.0
+	diffuse = 1.0 - (0.8 * (1.0 - diffuse));
 
   gl_FragColor = vec4(out_color.xyz * diffuse, out_color.a);
 }

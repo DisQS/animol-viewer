@@ -6,6 +6,8 @@
 #include "../../../../system/common/projection.hpp"
 #include "../../texture.hpp"
 
+#include "../object/shader.hpp" // for ubo
+
 #include "gl.vert.h"
 #include "gl.frag.h"
 
@@ -17,12 +19,14 @@ class shader_object_instanced {
 public:
 
 
-  struct ubo
-  {
-    gpu::float_vec4 offset;
-    gpu::float_vec4 rot;
-    gpu::float_vec4 scale;
-  };
+// the ubo used is shader_object::ubo
+//
+//  struct ubo
+//  {
+//    gpu::float_vec4 offset;
+//    gpu::float_vec4 rot;
+//    gpu::float_vec4 scale;
+//  };
 
 
   template<class T1, class T2> // eg: short, short
@@ -104,7 +108,7 @@ public:
   // store the buffer configs into a vertex_array_object and use that for drawing
 
   template<class VB, class IB>
-  void draw(const projection& p, buffer<ubo>& ubuf, const buffer<VB>& vbuf,
+  void draw(const projection& p, buffer<shader_object::ubo>& ubuf, const buffer<VB>& vbuf,
                       const buffer<IB>& ibuf, std::uint32_t* vertex_array_object)
   {
     if (*vertex_array_object == 0) // create the Vertex Array

@@ -37,10 +37,13 @@ public:
 
   void display() noexcept
 	{
-    glEnable(GL_DEPTH_TEST);
-
     if (!mouse_down_ && (x_speed_ != 0 || y_speed_ != 0))
       apply_momentum();
+
+    if (!display_geometry_)
+      return;
+
+    glEnable(GL_DEPTH_TEST);
 
     gpu::color bg = ui_->bg_color_[ui_->color_mode_];
     bg.a *= ui_->alpha_.alpha_;
@@ -64,6 +67,18 @@ public:
     }
 
     glDisable(GL_DEPTH_TEST);
+  }
+
+
+  inline void set_display_geometry(bool d) noexcept
+  {
+    display_geometry_ = d;
+  }
+
+
+  inline bool get_display_geometry() const noexcept
+  {
+    return display_geometry_;
   }
 
 
@@ -102,6 +117,12 @@ public:
   inline quaternion get_direction() const noexcept
   {
     return direction_;
+  }
+
+
+  inline auto get_uniform_buffer() noexcept
+  {
+    return &uniform_buffer_;
   }
 
 
@@ -324,6 +345,8 @@ private:
 
   float x_speed_{0};
   float y_speed_{0};
+
+  bool display_geometry_{true}; // can turn this off if we are acting as a control only
 
   constexpr static float sensitivity_ = 2.0 * M_PI * 30.0; // higher => more movement from mouse/touch needed
 

@@ -263,7 +263,7 @@ void visualise_atoms(char* data, int size)
 
   std::vector<visualise::atom> res;
 
-  v.generate_atoms(res, visualise::ATOMS | visualise::SHIFT_TO_CENTER_OF_MASS);
+  v.generate_atoms(res, visualise::ATOMS | visualise::HETATOMS | visualise::SHIFT_TO_CENTER_OF_MASS);
 
   emscripten_worker_respond(reinterpret_cast<char*>(res.data()), res.size() * sizeof(visualise::atom));
 }

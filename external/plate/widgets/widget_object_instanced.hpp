@@ -31,14 +31,21 @@ public:
   };
 
 
-  void init(const std::shared_ptr<state>& _ui, const gpu::int_box& coords,
-                            const std::shared_ptr<ui_event_destination>& parent) noexcept
+  void init(const std::shared_ptr<state>& _ui, const gpu::int_box& coords, const std::shared_ptr<ui_event_destination>& parent,
+                                                                    buffer<shader_object::ubo>* ext = nullptr) noexcept
   {
     ui_event_destination::init(_ui, coords, Prop::Display, parent);
 
-    direction_.set_to_default_angle();
+    if (ext)
+    {
+      ext_ubuf_ = ext;
+    }
+    else
+    {
+      direction_.set_to_default_angle();
 
-    upload_uniform();
+      upload_uniform();
+    }
   }
 
 
@@ -56,7 +63,7 @@ public:
 
     glEnable(GL_DEPTH_TEST);
 
-    ui_->shader_object_instanced_->draw(ui_->projection_, ubuf_, vbuf_, ibuf_, &vertex_array_object_);
+    ui_->shader_object_instanced_->draw(ui_->projection_, ext_ubuf_ ? *ext_ubuf_ : ubuf_, vbuf_, ibuf_, &vertex_array_object_);
 
     glDisable(GL_DEPTH_TEST);
   }
@@ -126,7 +133,9 @@ private:
   float scale_{1.0};
   quaternion direction_;
 
-  buffer<shader_object_instanced::ubo> ubuf_;
+  buffer<shader_object::ubo> ubuf_;
+
+  buffer<shader_object::ubo>* ext_ubuf_{nullptr}; // if we share the ubuf with an external object
 
   buffer<vert> vbuf_;
   buffer<inst> ibuf_;

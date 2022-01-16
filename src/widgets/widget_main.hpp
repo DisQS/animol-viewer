@@ -76,9 +76,6 @@ public:
     if (current_entry_ < 0)
       return;
 
-    if (widget_object_instanced_)
-      widget_object_instanced_->set_scale_and_direction(widget_object_->get_scale(), widget_object_->get_direction());
-
     if (!playing_ || pdb_list_.size() <= 1)
       return;
 
@@ -109,12 +106,6 @@ public:
     {
       widget_object_->set_geometry(coords_);
       widget_object_->zoom(z);
-
-      if (widget_object_instanced_)
-      {
-        widget_object_instanced_->set_geometry(coords_);
-        widget_object_instanced_->set_scale_and_direction(widget_object_->get_scale(), widget_object_->get_direction());
-      }
     }
 
     if (auto w = widget_control_.lock(); w)
@@ -256,9 +247,29 @@ public:
         return;
       }
 
+      if (code_utf8 == "KeyO") // testing own visualisation
+      {
+        if (widget_object_)
+          widget_object_->set_display_geometry(!widget_object_->get_display_geometry());
+      }
+
       if (code_utf8 == "KeyP") // testing own visualisation
       {
-        create_test_instanced();
+        if (widget_object_instanced_)
+        {
+          if (widget_object_instanced_->is_hidden())
+            widget_object_instanced_->unset_hidden();
+          else
+            widget_object_instanced_->set_hidden();
+        }
+        else
+          create_test_instanced();
+        return;
+      }
+
+      if (code_utf8 == "KeyV") // toggle orthogonal view
+      {
+        ui_->projection_.set_orthogonal(!ui_->projection_.is_orthogonal(), &ui_->anim_);
         return;
       }
 
@@ -856,7 +867,7 @@ private:
     operator widget_object_instanced::vert() const noexcept
     {
       const double normalf = 32767.0 / std::sqrt(p[0]*p[0] + p[1]*p[1] + p[2]*p[2]);
-      const double posf = radius / std::sqrt(p[0]*p[0] + p[1]*p[1] + p[2]*p[2]);
+      const double posf    = radius  / std::sqrt(p[0]*p[0] + p[1]*p[1] + p[2]*p[2]);
 
       return widget_object_instanced::vert{{static_cast<short>(posf*p[0]), static_cast<short>(posf*p[1]), static_cast<short>(posf*p[2])}, {static_cast<short>(normalf*p[0]), static_cast<short>(normalf*p[1]), static_cast<short>(normalf*p[2])}};
     }
@@ -883,75 +894,82 @@ private:
   };
 
 
-  /*consteval*/ std::vector<widget_object_instanced::vert> generate_sphere(const double radius) noexcept
+  /*consteval*/ std::vector<widget_object_instanced::vert> generate_sphere(const double radius, const int quality) noexcept
   {
     double_vert::set_radius(radius);
 
-    const/*expr*/ double phi    = ((1.0 + std::sqrt(5.0))/2.0);
-    const/*expr*/ double factor = std::sqrt(phi + 2.0);
-
-    // normals
-    const/*expr*/ double pa = 32767.0 * 1.0 / factor;
-    const/*expr*/ double pb = 32767.0 * phi / factor;
-    const/*expr*/ double ma = -pa;
-    const/*expr*/ double mb = -pb;
-
-    // positions
-    const/*expr*/ double pA = radius * 1.0 / factor;
-    const/*expr*/ double pB = radius * phi / factor;
-    const/*expr*/ double mA = -pA;
-    const/*expr*/ double mB = -pB;
-
-    /*const/expr/ std::vector<double_vert> p = {{
-      {{ 0, pA, pB}, { 0, pa, pb}}, {{ 0, pA, mB}, { 0, pa, mb}}, {{ 0, mA, pB}, { 0, ma, pb}}, {{ 0, mA, mB}, { 0, ma, mb}},
-      {{pA, pB,  0}, {pa, pb,  0}}, {{pA, mB,  0}, {pa, mb,  0}}, {{mA, pB,  0}, {ma, pb,  0}}, {{mA, mB,  0} ,{ma, mb,  0}},
-      {{pB,  0, pA}, {pb,  0, pa}}, {{mB,  0, pA}, {mb,  0, pa}}, {{pB,  0, mA}, {pb,  0, ma}}, {{mB,  0, mA}, {mb,  0, ma}}
-    }};*/
-
-    const/*expr*/ std::vector<double_vert> p = {{
-      {{ 0, pA, pB}}, {{ 0, pA, mB}}, {{ 0, mA, pB}}, {{ 0, mA, mB}},
-      {{pA, pB,  0}}, {{pA, mB,  0}}, {{mA, pB,  0}}, {{mA, mB,  0}},
-      {{pB,  0, pA}}, {{mB,  0, pA}}, {{pB,  0, mA}}, {{mB,  0, mA}}
-    }};
-
-    /*std::vector<widget_object_instanced::vert> triangles = {{
-      {p[0]}, {p[1]}, {p[2]}
-    }};*/
-
-    const/*expr*/ std::vector<std::uint32_t> indexes = {{
-      0, 4, 6,  1, 4, 6,                     // top 2
-      0, 4, 8,  1, 4,10,  0, 6, 9,  1, 6,11, // next 4
-
-      4, 8,10,  5, 8,10,  6, 9,11,  7, 9,11, // 2 vertical diamonds
-
-      0, 2, 8,  0, 2, 9,  1, 3,10,  1, 3,11, // 2 horizontal diamonds
-      
-      2, 5, 8,  3, 5,10,  2, 7, 9,  3, 7,11, // 4 connected to bottom 2
-      2, 5, 7,  3, 5, 7                      // bottom 2 
-    }};
-
+    std::vector<double_vert> points;
+    std::vector<std::uint32_t> indexes;
     std::vector<widget_object_instanced::vert> triangles;
-    
-    triangles.reserve(5 * p.size());
 
-    //for (const auto i : indexes)
-    //  triangles.emplace_back(static_cast<widget_object_instanced::vert>(p[i]));
+    if (quality > 0) //icosahedron
+    {
+      // phi (golden ratio)
+      const/*expr*/ double p = ((1.0 + std::sqrt(5.0))/2.0);
+
+      // all rotations of (0, +-1, +-phi))
+      points = {{
+        {{ 0,  1,  p}}, {{ 0,  1, -p}}, {{ 0, -1,  p}}, {{ 0, -1, -p}},
+        {{ 1,  p,  0}}, {{ 1, -p,  0}}, {{-1,  p,  0}}, {{-1, -p,  0}},
+        {{ p,  0,  1}}, {{-p,  0,  1}}, {{ p,  0, -1}}, {{-p,  0, -1}}
+      }};
+
+      indexes = {{
+        0, 4, 6,  1, 4, 6,                     // top 2
+        0, 4, 8,  1, 4,10,  0, 6, 9,  1, 6,11, // next 4
+
+        4, 8,10,  5, 8,10,  6, 9,11,  7, 9,11, // 2 vertical diamonds
+
+        0, 2, 8,  0, 2, 9,  1, 3,10,  1, 3,11, // 2 horizontal diamonds
+        
+        2, 5, 8,  3, 5,10,  2, 7, 9,  3, 7,11, // 4 connected to bottom 2
+        2, 5, 7,  3, 5, 7                      // bottom 2 
+      }};
+      
+      // each point used in 5 triangles of icosahedron
+      triangles.reserve(5 * points.size() * quality);
+    }
+    else if (quality == 0) //octahedron
+    {
+      points = {{ {{1, 0, 0}}, {{-1, 0, 0}}, {{0, 1, 0}}, {{0, -1, 0}}, {{0, 0, 1}}, {{0, 0, -1}} }};
+
+      indexes = {{ 0,2,4, 0,4,3, 0,3,5, 0,5,2, 1,4,2, 1,3,4, 1,5,3, 1,2,5 }};
+
+      // each point used in 4 triangles of tetrahedron
+      triangles.reserve(4 * points.size());
+    }
+    else //tetrahedron
+    {
+      // 1/sqrt2
+      const/*expr*/ double s = 1.0/std::sqrt(2.0);
+
+      points = {{ {{0, 1, s}}, {{0, -1, s}}, {{1, 0, -s}}, {{-1, 0, -s}} }};
+
+      indexes = {{ 0,1,2, 2,1,3, 2,3,0, 0,3,1 }};
+
+      // each point used in 3 triangles of tetrahedron
+      triangles.reserve(3 * points.size());
+    }
+
+    std::uint32_t split = std::max(quality, 1);
 
     for (std::uint32_t i = 0; i < indexes.size(); i+=3)
     {
-      auto p0 = p[indexes[i]];
-      auto p1 = p[indexes[i+1]];
-      auto p2 = p[indexes[i+2]];
+      auto p0 = points[indexes[i]];
+      auto p1 = points[indexes[i+1]];
+      auto p2 = points[indexes[i+2]];
 
       // number of triangles in sphere is 20*split^2
-      std::uint32_t split = 3;
 
+      // for each row
       for (std::uint32_t i = 0; i < split; i++)
       {
+        // first triangle in row
         triangles.emplace_back(static_cast<widget_object_instanced::vert>(( p0*(split-i  )      + p2*i     )/split));
         triangles.emplace_back(static_cast<widget_object_instanced::vert>(( p0*(split-i-1) + p1 + p2*i     )/split));
         triangles.emplace_back(static_cast<widget_object_instanced::vert>(( p0*(split-i-1)      + p2*(i+1) )/split));
         
+        // for each diamond in the row
         for (std::uint32_t j = 1; j < split - i; j++)
         {
           triangles.emplace_back(static_cast<widget_object_instanced::vert>(( p0*(split-i-j)   + p1*j     + p2*i     )/split));
@@ -963,28 +981,7 @@ private:
           triangles.emplace_back(static_cast<widget_object_instanced::vert>(( p0*(split-i-1-j) + p1*j     + p2*(i+1) )/split));
         }
       }
-
-      /*triangles.emplace_back(static_cast<widget_object_instanced::vert>(p0));
-      triangles.emplace_back(static_cast<widget_object_instanced::vert>((p0+p1)/2));
-      triangles.emplace_back(static_cast<widget_object_instanced::vert>((p0+p2)/2));
-
-      triangles.emplace_back(static_cast<widget_object_instanced::vert>((p0+p2)/2));
-      triangles.emplace_back(static_cast<widget_object_instanced::vert>((p0+p1)/2));
-      triangles.emplace_back(static_cast<widget_object_instanced::vert>((p1+p2)/2));
-
-      triangles.emplace_back(static_cast<widget_object_instanced::vert>((p0+p1)/2));
-      triangles.emplace_back(static_cast<widget_object_instanced::vert>(p1));
-      triangles.emplace_back(static_cast<widget_object_instanced::vert>((p1+p2)/2));
-
-      triangles.emplace_back(static_cast<widget_object_instanced::vert>((p0+p2)/2));
-      triangles.emplace_back(static_cast<widget_object_instanced::vert>((p1+p2)/2));
-      triangles.emplace_back(static_cast<widget_object_instanced::vert>(p2));*/
-
-      //triangles.emplace_back(static_cast<widget_object_instanced::vert>(p0));
-      //triangles.emplace_back(static_cast<widget_object_instanced::vert>(p1));
-      //triangles.emplace_back(static_cast<widget_object_instanced::vert>(p2));
     }
-
 
     return triangles;
   }
@@ -995,9 +992,10 @@ private:
     if (pdb_list_.empty() || widget_object_instanced_)
       return;
 
-    widget_object_instanced_ = ui_event_destination::make_ui<widget_object_instanced>(ui_, coords_, widget_object_);
+    widget_object_instanced_ = ui_event_destination::make_ui<widget_object_instanced>(ui_, coords_, widget_object_,
+                                                                                    widget_object_->get_uniform_buffer());
 
-    auto v = generate_sphere(50.0);
+    auto v = generate_sphere(32768.0/400.0, -1);//50.0);
     /*std::vector<widget_object_instanced::vert> v = {{
       {{ -50, -50, 0 }, { 0, 1, 0 }},
       {{ -50,  50, 0 }, { 0, 1, 0 }},
@@ -1020,8 +1018,6 @@ private:
 
     widget_object_instanced_->set_instance(i);
 */
-
-    widget_object_instanced_->set_scale_and_direction(widget_object_->get_scale(), widget_object_->get_direction());
 
     if (local_)
     {
