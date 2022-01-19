@@ -9,8 +9,11 @@
 
 #include "widgets/widget_rounded_box.hpp"
 #include "widgets/widget_object.hpp"
-#include "widgets/widget_object_instanced.hpp"
 #include "widgets/widget_text.hpp"
+
+#include "widget_layer.hpp"
+#include "widget_layer_cartoon.hpp"
+#include "widget_layer_spacefill.hpp"
 
 #include "widget_control.hpp"
 
@@ -19,17 +22,8 @@ namespace pdbmovie {
 
 using namespace plate;
 
-template<bool SHARED_COLORS>
 class widget_main : public plate::ui_event_destination
 {
-
-  struct compact_header
-  {
-    int num_triangles;
-    int num_strips;
-  };
-
-  // can operate on data with interleaved colors, or not.
 
   struct vert_with_color
   {
@@ -38,32 +32,60 @@ class widget_main : public plate::ui_event_destination
     std::array<std::uint8_t,4> color;
   };
 
-  struct vert_without_color
-  {
-    std::array<short,3>        position;
-    std::array<short,3>        normal;
-  };
-
-  struct cols_sep
-  {
-    std::array<std::uint8_t,4> color;
-  };
-
-
-  typedef typename std::conditional<SHARED_COLORS, vert_without_color, vert_with_color>::type  vert;
-  typedef typename std::conditional<SHARED_COLORS, cols_sep,           bool>::type             cols;
-
 
 public:
+
+  std::unique_ptr<worker> worker_; // a multi-threaded worker for performaing background tasks
 
 
   void init(const std::shared_ptr<plate::state>& _ui, plate::gpu::int_box& coords, std::string url, std::string code, std::string description) noexcept
   {
     ui_event_destination::init(_ui, coords, Prop::Display | Prop::Reshape);
-    log_debug(FMT_COMPILE("url: '{}'  code:'{}'"), url, code);
+
+    url_         = url;
+    item_        = code;
+    description_ = description;
+
+    log_debug(FMT_COMPILE("url: '{}'  item:'{}'"), url_, item_);
+
+    widget_object_ = ui_event_destination::make_ui<widget_object<vert_with_color>>(ui_, coords_,
+                                          Prop::Display | Prop::Input | Prop::Swipe | Prop::Priority, shared_from_this());
+
+    widget_object_->set_display_geometry(false); // this is only used as a controller
+
+    widget_object_->set_user_interacted_cb([this] ()
+    {
+      create_control();
+    });
+
+    worker_ = std::make_unique<worker>();
+
+    worker_->set_path("/animol-viewer/version/1/decoder_worker.js");
 
     if (url != "" && code != "")
-      start_remote(url, code, description);
+    {
+      is_remote_ = true;
+
+      if (code.ends_with(".pdb")) // just a single pdb file, so no need for a movie plan
+      {
+        master_frame_id_ = 0;
+        current_entry_   = 0;
+        total_frames_    = 1;
+        playing_         = false;
+
+        per_frame_files_.push_back(item_);
+
+        item_            = item_.substr(0, item_.size() - 4);
+
+        auto l = ui_event_destination::make_ui<widget_layer_cartoon<widget_main>>(ui_, coords_, widget_object_, this);
+
+        layers_.push_back(l);
+      }
+      else
+        load_movie_plan();
+
+      set_title();
+    }
     else
       create_control();
 
@@ -73,11 +95,10 @@ public:
 
   void display() noexcept
   {
-    if (current_entry_ < 0)
+    if (current_entry_ < 0 || !playing_ || total_frames_ <= 1)
       return;
 
-    if (!playing_ || pdb_list_.size() <= 1)
-      return;
+    // must be in an animation
 
     current_time_ += ui_->frame_diff_;
 
@@ -113,6 +134,9 @@ public:
       gpu::int_box cc = { coords_.p1, { coords_.p2.x, static_cast<int>(coords_.p1.y + (control_height_ * ui_->pixel_ratio_)) } };
       w->set_geometry(cc);
     }
+
+    for (auto& l : layers_)
+      l->set_geometry(coords_);
   }
 
 
@@ -120,6 +144,7 @@ public:
   {
     worker_.reset();
   }
+
 
   ~widget_main() noexcept
   {
@@ -142,46 +167,110 @@ public:
   }
 
 
+  inline int get_current_frame() const noexcept
+  {
+    return current_entry_;
+  }
+
+  // get sub-frame position and total frames
+
   std::pair<float, int> get_frame() const noexcept
   {
     float partial_frame = std::min(1.0f, (current_time_ / frame_time_));
 
-    if (frame_direction_ == 1 && current_entry_ < pdb_list_.size() - 1)
-      return { current_entry_ + partial_frame, pdb_list_.size() };
+    if (frame_direction_ == 1 && current_entry_ < total_frames_ - 1)
+      return { current_entry_ + partial_frame, total_frames_ };
     else
-      return { current_entry_ - partial_frame, pdb_list_.size() };
+      return { current_entry_ - partial_frame, total_frames_ };
   }
 
 
   inline bool has_frame() const noexcept
   {
-    return widget_object_.get() != nullptr;
+    return total_frames_ > 0;
   }
 
 
   bool set_frame(int frame) noexcept
   {
-    if (store_.empty())
-      return false;
-
     if (frame < 0)
       frame = 0;
 
-    if (frame >= store_.size())
-      frame = store_.size() - 1;
+    if (frame >= total_frames_)
+      frame = total_frames_ - 1;
 
-    if (store_[frame].vertex_strip.is_ready())
-    {
-      current_time_ = 0;
-      current_entry_ = frame;
+    current_time_ = 0;
+    current_entry_ = frame;
+
+    for (auto& l : layers_)
+      l->set_frame(current_entry_);
   
-      widget_object_->set_model(&(store_[current_entry_].vertex),       &shared_vertex_colors_);
-      widget_object_->add_model(&(store_[current_entry_].vertex_strip), &shared_vertex_strip_colors_);
+    return true;
+  }
 
-      return true;
-    }
 
-    return false;
+  inline int get_total_frames() const noexcept
+  {
+    return total_frames_;
+  }
+
+
+  inline bool set_total_frames(int nf) noexcept
+  {
+    if (total_frames_ == nf)
+      return false;
+
+    total_frames_ = nf;
+
+    return true;
+  }
+
+
+  inline auto get_shared_ubuf() noexcept
+  {
+    return widget_object_->get_uniform_buffer();
+  }
+
+
+  inline void set_scale(float s) noexcept
+  {
+    widget_object_->set_scale(s);
+  }
+
+
+  inline float get_scale() const noexcept
+  {
+    return widget_object_->get_scale();
+  }
+
+
+  inline bool is_remote() const noexcept
+  {
+    return is_remote_;
+  }
+
+
+  inline const std::string& get_item() const noexcept
+  {
+    return item_;
+  }
+
+
+  inline const std::string& get_url() const noexcept
+  {
+    return url_;
+  }
+
+
+  inline const std::vector<std::string>& get_frame_files() const noexcept
+  {
+    return per_frame_files_;
+  }
+
+
+  inline int get_master_frame_id() const noexcept
+  {
+    return master_frame_id_;
   }
 
 
@@ -196,14 +285,6 @@ public:
       if (files.size() > 0)
         start_local("", files);
     });
-
-//    ui_event::directory_show_picker(".*\\.pdb$", [this] (std::string dir_name, std::vector<std::string>& files)
-//    {
-//      emscripten_webgl_make_context_current(ui_->ctx_);
-//
-//      if (files.size() > 0)
-//        start_local(dir_name, files);
-//    });
   }
 
 
@@ -247,23 +328,40 @@ public:
         return;
       }
 
-      if (code_utf8 == "KeyO") // testing own visualisation
+      if (code_utf8 == "KeyP") // cycle visual
       {
-        if (widget_object_)
-          widget_object_->set_display_geometry(!widget_object_->get_display_geometry());
-      }
+        // if there is only one layer, hide it and add the next layer
 
-      if (code_utf8 == "KeyP") // testing own visualisation
-      {
-        if (widget_object_instanced_)
+        if (layers_.size() == 1)
         {
-          if (widget_object_instanced_->is_hidden())
-            widget_object_instanced_->unset_hidden();
-          else
-            widget_object_instanced_->set_hidden();
+          layers_[0]->set_hidden();
+
+          if (layers_[0]->name() == "layer_spacefill")
+          {
+            auto l = ui_event_destination::make_ui<widget_layer_cartoon<widget_main>>(ui_, coords_, widget_object_, this);
+            layers_.push_back(l);
+          }
+
+          if (layers_[0]->name() == "layer_cartoon")
+          {
+            auto l = ui_event_destination::make_ui<widget_layer_spacefill<widget_main>>(ui_, coords_, widget_object_, this);
+            layers_.push_back(l);
+          }
         }
-        else
-          create_test_instanced();
+        else // size == 2
+        {
+          if (layers_[0]->is_hidden())
+          {
+            layers_[0]->unset_hidden();
+            layers_[1]->set_hidden();
+          }
+          else
+          {
+            layers_[0]->set_hidden();
+            layers_[1]->unset_hidden();
+          }
+        }
+
         return;
       }
 
@@ -278,6 +376,69 @@ public:
   }
 
 
+  void set_loading() noexcept
+  {
+    ui_->do_draw();
+
+    std::string loading = loading_error_;
+
+    if (loading.empty())
+    {
+      if (total_frames_ == 0) // haven't loaded plan/directory listing
+      {
+        if (item_ == "")
+          loading = "";
+        else
+          loading = "loading: plan";
+      }
+      else
+      {
+        int loaded_count = 0;
+
+        for (auto& l : layers_)
+          loaded_count += l->get_loaded_count();
+
+        if (loaded_count == layers_.size() * total_frames_) // all loaded
+        {
+          if (widget_loading_)
+            widget_loading_->hide();
+
+          // fixme worker_.reset(); // no more work to do
+
+          return;
+        }
+
+        loading = fmt::format(FMT_COMPILE("loaded: {}/{}"), loaded_count / layers_.size(), total_frames_);
+      }
+    }
+
+    gpu::int_box c = { { coords_.p1.x, static_cast<int>(coords_.p1.y + (control_height_ * ui_->pixel_ratio_)) },
+                       coords_.p2 };
+
+    if (widget_loading_)
+    {
+      widget_loading_->show();
+      widget_loading_->set_geometry(c);
+      widget_loading_->set_text(loading);
+    }
+    else
+    {
+      widget_loading_ = ui_event_destination::make_ui<widget_text>(ui_, c, Prop::Display, shared_from_this(), loading,
+                                  gpu::align::BOTTOM | gpu::align::OUTSIDE, ui_->txt_color_, gpu::rotation{0.0f,0.0f,0.0f}, 0.8f);
+
+      auto fade_in = plate::ui_event_destination::make_anim<plate::anim_alpha>(ui_, widget_loading_, plate::ui_anim::Dir::Forward, 2.0f);
+    }
+  }
+
+
+  void set_error(std::string_view error_msg) noexcept
+  {
+    loading_error_ = error_msg;
+
+    set_loading();
+  }
+
+
   std::string_view name() const noexcept
   {
     return "#main";
@@ -287,49 +448,24 @@ public:
 private:
 
 
-  void start_remote(std::string url, std::string code, std::string description) noexcept
+  void load_movie_plan() noexcept
   {
-    clear();
-
-    local_       = false;
-    item_        = code;
-    url_         = url;
-    description_ = description;
-
-    if (auto w = widget_control_.lock())
-      w->update_status();
-
-    if (item_.ends_with(".pdb")) // no nedd for a movie.plan
+    auto h = plate::async::request(url_ + item_ + "/movie.plan", "GET", "", [this] (std::uint32_t handle, plate::data_store&& d)
     {
-      pdb_list_.push_back(item_);
-      item_ = item_.substr(0, item_.size() - 4);
-
-      current_entry_ = 0;
-      store_.resize(1);
-
-      set_title();
-
-      log_debug("remote has: 1 frame");
-
-      generate_script();
-
-      return;
-    }
-
-    // load in movie plan file
-
-    set_title();
-    set_loading();
-
-    auto h = async::request(url_ + item_ + "/movie.plan", "GET", "", [this] (std::uint32_t handle, plate::data_store&& d)
-    {
-      emscripten_webgl_make_context_current(ui_->ctx_);
+      emscripten_webgl_make_context_current(this->ui_->ctx_);
 
       if (d.empty())
       {
-        log_debug("movie.plan is empty");
+        loading_error_ = "movie.plan is empty";
+
+        log_debug(FMT_COMPILE("{}"), loading_error_);
+
+        set_loading();
+
         return;
       }
+
+      master_frame_id_ = -1;
 
       // read in list of pdb files
 
@@ -345,35 +481,54 @@ private:
         // if there's a blank line, the previous line was the initial structure
         if (end == start)
         {
-          current_entry_ = pdb_list_.size() - 1;
+          master_frame_id_ = std::max(0ul, per_frame_files_.size() - 1);
           continue;
         }
 
-        pdb_list_.push_back(std::string(sv.substr(start, end - start)));
+        per_frame_files_.push_back(std::string(sv.substr(start, end - start)));
       }
 
-      auto count = pdb_list_.size();
+      total_frames_ = per_frame_files_.size();
+
+      if (total_frames_ == 0)
+      {
+        loading_error_ = "movie.plan contains no frames";
+
+        log_debug(FMT_COMPILE("{}"), loading_error_);
+
+        set_loading();
+
+        return;
+      }
 
       // if an initial structure wasn't specified, assume it's the middle one
 
-      if (current_entry_ == -1)
-        current_entry_ = count / 2 - 1;
+      if (master_frame_id_ == -1)
+        master_frame_id_ = std::max(0, total_frames_ / 2 - 1);
 
-      // setup the load order- from initial+1 up, and then from initial-1 down..
+      current_entry_ = master_frame_id_;
 
-      for (int i = current_entry_ + 1; i < count; ++i)
-        to_load_.push(i);
+      playing_ = true;
 
-      for (int i = current_entry_ - 1; i >= 0; --i)
-        to_load_.push(i);
+      log_debug(FMT_COMPILE("remote has: {} frames, main: {}"), total_frames_, master_frame_id_);
 
-      store_.resize(count);
+      auto l = ui_event_destination::make_ui<widget_layer_cartoon<widget_main>>(ui_, coords_, widget_object_, this);
 
-      log_debug(FMT_COMPILE("remote has: {} frames, main: {}"), count, current_entry_);
-
-      generate_script();
+      layers_.push_back(l);
     },
-    {}, {}); // fixme, todo - handle failed to load
+
+    [this] (std::uint32_t handle, int error_code, std::string error_string)
+    {
+      loading_error_ = fmt::format(FMT_COMPILE("unable to load movie.plan: {} {}"), error_code, error_string);
+
+      log_debug(FMT_COMPILE("{}"), loading_error_);
+
+      set_loading();
+    },
+
+    {});
+
+    set_loading();
   }
 
 
@@ -381,331 +536,30 @@ private:
   {
     clear();
 
-    local_       = true;
-    item_        = dir_name;
-    description_ = "";
-    pdb_list_    = std::move(files);
+    is_remote_       = false;
+    description_     = "";
+    url_             = "";
+    item_            = dir_name;
+    per_frame_files_ = files;
+    master_frame_id_ = 0;
+    current_entry_   = 0;
+    current_time_    = 0;
+    total_frames_    = files.size();
+    playing_         = true;
 
-    log_debug(FMT_COMPILE("starting local: {} frames: {}"), item_, pdb_list_.size());
+    auto l = ui_event_destination::make_ui<widget_layer_cartoon<widget_main>>(ui_, coords_, widget_object_, this);
+
+    layers_.push_back(l);
+
+    log_debug(FMT_COMPILE("starting local: {} frames: {}"), dir_name, files.size());
 
     set_title();
 
-    // start loading from the first entry
-
-    current_entry_ = 0;
-
-    // setup the load order- from initial+1 up
-
-    for (int i = current_entry_ + 1; i < pdb_list_.size(); ++i)
-      to_load_.push(i);
-
-    store_.resize(pdb_list_.size());
-
-    generate_script();
-  }
-
-  
-  void generate_script() noexcept
-  {
-    ui_->do_draw();
-    set_loading();
-
     if (auto w = widget_control_.lock())
       w->update_status();
-
-    auto old_worker = std::move(worker_); // delete the old one (if any) after we have created a new one
-
-    worker_ = std::make_unique<worker>();
-
-    worker_->set_path("/animol-viewer/version/1/decoder_worker.js");
-
-    // display_style_ = 1; // hack
-
-    if (local_)
-    {
-      // load in file and then request the worker to generate the script
-
-      ui_event::directory_load_file(item_, pdb_list_[current_entry_], [this, self{shared_from_this()}] (std::string&& pdb)
-      {
-        if (!worker_)
-          return;
-
-        if (display_style_ == 1) // ball-and-stick
-        {
-          script_ = "title \"na\"\nplot\nread mol \"/i.pdb\";\ntransform atom * by centre position atom *;\nset colourparts on;\nset segments 8;\nball-and-stick atom *;\nend_plot\n";
-          get_first_frame(pdb);
-          return;
-        }
-        if (display_style_ == 2) // cpk
-        {
-          script_ = "title \"na\"\nplot\nread mol \"/i.pdb\";\ntransform atom * by centre position atom *;\nset colourparts on;\nset segments 8;\ncpk atom *;\nend_plot\n";
-          get_first_frame(pdb);
-          return;
-        }
-
-        // display_style_ == 0 // cartoon
-
-        worker_->call("script_with", pdb, [this, self{shared_from_this()}, pdb] (std::span<char> d)
-        {
-          script_ = std::string(d.data(), d.size());
-
-          get_first_frame(pdb);
-        });
-      });
-    }
-    else
-    {
-      if (display_style_ == 1) // ball-and-stick
-      {
-        script_ = "title \"na\"\nplot\nread mol \"/i.pdb\";\ntransform atom * by centre position atom *;\nset colourparts on;\nset segments 8;\nball-and-stick atom *;\nend_plot\n";
-        get_first_frame();
-        return;
-      }
-      if (display_style_ == 2) // cpk
-      {
-        script_ = "title \"na\"\nplot\nread mol \"/i.pdb\";\ntransform atom * by centre position atom *;\nset colourparts on;\nset segments 8;\ncpk atom *;\nend_plot\n";
-        get_first_frame();
-        return;
-      }
-
-      // request the worker to download the pdb file and generate the script
-
-      std::string u = url_ + item_ + "/" + pdb_list_[current_entry_];
-
-      if (!worker_)
-        return;
-
-      worker_->call("script", u, [this, self{shared_from_this()}] (std::span<char> d)
-      {
-        script_ = std::string(d.data(), d.size());
-        get_first_frame();
-      });
-    }
   }
 
-
-  void get_first_frame(std::string pdb = "") noexcept
-  {
-    // script has been generated, so run the decoder with the main frame,
-    //
-    // once the main frame has been generated, upload the script to all the workers and start processing the subsequent frames
-
-
-    if (local_)
-    {
-      std::vector<char> data_to_send(4);
-        
-      std::uint32_t script_size = script_.size();
-        
-      std::memcpy(data_to_send.data(), &script_size, 4);
-        
-      data_to_send.insert(data_to_send.end(), script_.begin(), script_.end());
-      data_to_send.insert(data_to_send.end(),     pdb.begin(),     pdb.end());
-        
-      if (!worker_)
-        return;
   
-      worker_->call(SHARED_COLORS ? "decode_contents_color_non_interleaved" : "decode_contents_color_interleaved", data_to_send,
-        [this, self{shared_from_this()}] (std::span<char> d)
-      {
-        emscripten_webgl_make_context_current(ui_->ctx_);
-
-        process_main_frame(d);
-      });
-    }
-    else // remote
-    {
-      std::string u = url_ + item_ + "/" + pdb_list_[current_entry_];
-
-      std::vector<char> data_to_send(4);
-
-      std::uint32_t script_size = script_.size();
-
-      std::memcpy(data_to_send.data(), &script_size, 4);
-
-      data_to_send.insert(data_to_send.end(), script_.begin(), script_.end());
-      data_to_send.insert(data_to_send.end(),       u.begin(),       u.end());
-
-      if (!worker_)
-        return;
-
-      worker_->call(SHARED_COLORS ? "decode_url_color_non_interleaved" : "decode_url_color_interleaved", data_to_send,
-        [this, self{shared_from_this()}] (std::span<char> d)
-      {
-        emscripten_webgl_make_context_current(ui_->ctx_);
-
-        process_main_frame(d);
-      });
-    }
-  }
-
-
-  void process_next() noexcept
-  {
-    if (to_load_.empty()) // nothing left to ask for
-      return;
-
-    if (!worker_)
-      return;
-
-    auto to_load = to_load_.front();
-    to_load_.pop();
-
-    if (local_)
-    {
-      ui_event::directory_load_file(item_, pdb_list_[to_load], [this, entry = to_load] (std::string&& pdb)
-      {
-        std::vector<char> data_to_send(4);
-
-        std::uint32_t script_size = script_.size();
-
-        std::memcpy(data_to_send.data(), &script_size, 4);
-
-        data_to_send.insert(data_to_send.end(), script_.begin(), script_.end());
-        data_to_send.insert(data_to_send.end(),     pdb.begin(),     pdb.end());
-
-        if (!worker_)
-          return;
-
-        worker_->call(SHARED_COLORS ? "decode_contents_no_color" : "decode_contents_color_interleaved", data_to_send,
-          [this, self{shared_from_this()}, entry] (std::span<char> d)
-        {
-          emscripten_webgl_make_context_current(ui_->ctx_);
-          process_decoded(entry, d);
-        });
-      });
-    }
-    else
-    {
-      std::string u = url_ + item_ + "/" + pdb_list_[to_load];
-
-      std::vector<char> data_to_send(4);
-
-      std::uint32_t script_size = script_.size();
-
-      std::memcpy(data_to_send.data(), &script_size, 4);
-
-      data_to_send.insert(data_to_send.end(), script_.begin(), script_.end());
-      data_to_send.insert(data_to_send.end(),       u.begin(),       u.end());
-
-      worker_->call(SHARED_COLORS ? "decode_url_no_color" : "decode_url_color_interleaved", data_to_send,
-        [this, self{shared_from_this()}, entry = to_load] (std::span<char> d)
-      { 
-        emscripten_webgl_make_context_current(ui_->ctx_);
-        process_decoded(entry, d);
-      });
-    }
-  }
-
-
-  void process_decoded(int entry, std::span<char> d) noexcept
-  {
-    compact_header* h = new (d.data()) compact_header;
-
-    auto p = reinterpret_cast<std::byte*>(d.data()) + sizeof(compact_header);
-
-    //log_debug(FMT_COMPILE("frame: {} triangles: {} strips: {}"), entry, h->num_triangles, h->num_strips);
-
-    store_[entry].vertex.upload(p, h->num_triangles, GL_TRIANGLES);
-    p += h->num_triangles * sizeof(vert);
-
-    store_[entry].vertex_strip.upload(p, h->num_strips, GL_TRIANGLE_STRIP);
-
-    process_frame(entry);
-    process_next();
-  }
-
-
-  void process_main_frame(std::span<char> d) noexcept
-  {
-    // main frame has been converted to geometry
-
-    compact_header* h = new (d.data()) compact_header;
-
-    auto p = reinterpret_cast<std::byte*>(d.data()) + sizeof(compact_header);
-
-    log_debug(FMT_COMPILE("main frame triangles: {} strips: {}"), h->num_triangles, h->num_strips);
-
-    // upload the vertices
-
-    store_[current_entry_].vertex.upload(p, h->num_triangles, GL_TRIANGLES);
-    p += h->num_triangles * sizeof(vert);
-        
-    store_[current_entry_].vertex_strip.upload(p, h->num_strips, GL_TRIANGLE_STRIP);
-    p += h->num_strips * sizeof(vert);
-
-    if constexpr (SHARED_COLORS) // upload the colors
-    {
-      shared_vertex_colors_.upload(p, h->num_triangles);
-      p += h->num_triangles * sizeof(cols);
-
-      shared_vertex_strip_colors_.upload(p, h->num_strips);
-    }
-
-    // start number_of_worker_threads processing
-
-    for (int i = 0; i < worker::get_max_workers(); ++i)
-      process_next();
-
-    widget_object_ = ui_event_destination::make_ui<widget_object<vert, cols>>(ui_, coords_,
-                                          Prop::Display | Prop::Input | Prop::Swipe | Prop::Priority, shared_from_this());
-
-    widget_object_->set_model(&store_[current_entry_].vertex,       &shared_vertex_colors_);
-    widget_object_->add_model(&store_[current_entry_].vertex_strip, &shared_vertex_strip_colors_);
-
-    widget_object_->set_user_interacted_cb([this] ()
-    {
-      create_control();
-    });
-
-    auto fade_in = plate::ui_event_destination::make_anim<plate::anim_alpha>(ui_, widget_object_, plate::ui_anim::Dir::Forward, 0.3f);
-
-    // loop through data to find protein width
-
-    p = reinterpret_cast<std::byte*>(d.data()) + sizeof(compact_header);
-
-    int max = 0;
-
-    auto v = reinterpret_cast<vert*>(p);
-
-    for (int i = 0; i < h->num_triangles + h->num_strips; ++i, ++v)
-    {
-      if (abs(v->position[0]) > max) max = abs(v->position[0]);
-      if (abs(v->position[1]) > max) max = abs(v->position[1]);
-      if (abs(v->position[2]) > max) max = abs(v->position[2]);
-    }
-
-    // values are int16 and so range from +/- 32'768
-    //
-    // to ensure it fits in the 'screen', calculate the minimum screen dimension, halve it to get the width and then scale
-    // according to the max value found
-    //
-    // scale it a bit smaller to cope with movement from the central main frame we're looking at FIXME - calc dynamically from other
-    // frames?
-
-    log_debug(FMT_COMPILE("max width: {}"), max);
-
-    widget_object_->set_scale((std::min(my_width(), my_height())/2.0) * (32'768.0 / max) * 0.8);
-
-    process_frame(current_entry_);
-  }
-
-
-  void process_frame(int entry) noexcept
-  {
-    ++loaded_count_;
-
-    if (loaded_count_ == pdb_list_.size())
-    {
-      log_debug(FMT_COMPILE("all loaded: {}"), loaded_count_);
-    }
-
-    set_loading();
-
-    ui_->do_draw();
-  }
-
-
   void set_next_frame() noexcept
   {
     auto next_entry = current_entry_ + frame_direction_;
@@ -718,55 +572,43 @@ private:
     }
     else
     {
-      if (next_entry == pdb_list_.size())
+      if (next_entry == total_frames_)
       {
-        next_entry = pdb_list_.size() - 1;
+        next_entry = total_frames_ - 1;
         next_frame_direction = -1;
       }
     }
 
-    if (store_[next_entry].vertex_strip.is_ready())
-    {
-      current_time_ = 0;
-      current_entry_ = next_entry;
-      frame_direction_ = next_frame_direction;
+    for (auto& l : layers_)
+      if (!l->set_frame(next_entry))
+        return; // not yet ready for next frame
 
-      widget_object_->set_model(&(store_[current_entry_].vertex),       &shared_vertex_colors_);
-      widget_object_->add_model(&(store_[current_entry_].vertex_strip), &shared_vertex_strip_colors_);
-    }
+    current_time_    = 0;
+    current_entry_   = next_entry;
+    frame_direction_ = next_frame_direction;
   }
 
 
   void clear()
   {
-    store_.clear();
+    playing_         = false;
+    current_entry_   = -1;
+    total_frames_    = 0;
+    frame_direction_ = 1;
 
-    std::queue<int> x;
-    x.swap(to_load_);
+    description_ = "";
+    item_        = "";
+    url_         = "";
 
-    loaded_count_ = 0;
+    per_frame_files_.clear();
+    master_frame_id_ = 0;
 
-    current_entry_ = -1;
+    for (auto& l : layers_)
+      l->disconnect_from_parent();
 
-    item_ = "";
+    layers_.clear();
 
-    pdb_list_.clear();
-
-    url_  = "";
-
-    script_.clear();
-
-    if (widget_object_instanced_)
-    {
-      widget_object_instanced_->disconnect_from_parent();
-      widget_object_instanced_.reset();
-    }
-
-    if (widget_object_)
-    {
-      widget_object_->disconnect_from_parent();
-      widget_object_.reset();
-    }
+    widget_object_->set_scale(1.0);
   }
 
 
@@ -775,7 +617,17 @@ private:
     std::string title{};
 
     if (description_ == "")
-      title = local_ ? "local: " + item_ : item_;
+    {
+      if (is_remote_)
+        title = item_;
+      else
+      {
+        if (per_frame_files_.empty())
+          title = "";
+        else
+          title = "local: " + per_frame_files_[0];
+      }
+    }
     else
       title = item_ + ": " + description_;
 
@@ -798,51 +650,6 @@ private:
   }
 
 
-  void set_loading() noexcept
-  {
-    std::string loading;
-
-    if (current_entry_ == -1) // haven't loaded plan/directory listing
-    {
-      if (item_ == "")
-        loading = "";
-      else
-        loading = "loading: plan";
-    }
-    else
-    {
-      if (loaded_count_ == pdb_list_.size()) // all loaded
-      {
-        if (widget_loading_)
-          widget_loading_->hide();
-
-        worker_.reset(); // no more work to do
-
-        return;
-      }
-
-      loading = fmt::format(FMT_COMPILE("loaded: {}/{}"), loaded_count_, pdb_list_.size());
-    }
-
-    gpu::int_box c = { { coords_.p1.x, static_cast<int>(coords_.p1.y + (control_height_ * ui_->pixel_ratio_)) },
-                       coords_.p2 };
-
-    if (widget_loading_)
-    {
-      widget_loading_->show();
-      widget_loading_->set_geometry(c);
-      widget_loading_->set_text(loading);
-    }
-    else
-    {
-      widget_loading_ = ui_event_destination::make_ui<widget_text>(ui_, c, Prop::Display, shared_from_this(), loading,
-                                  gpu::align::BOTTOM | gpu::align::OUTSIDE, ui_->txt_color_, gpu::rotation{0.0f,0.0f,0.0f}, 0.8f);
-
-      auto fade_in = plate::ui_event_destination::make_anim<plate::anim_alpha>(ui_, widget_loading_, plate::ui_anim::Dir::Forward, 2.0f);
-    }
-  }
-
-
   void create_control() noexcept
   {
     if (auto w = widget_control_.lock(); w)
@@ -857,248 +664,34 @@ private:
   }
 
 
-  // temporary struct used in generate_sphere to create widget_object_instanced::verts
-  struct double_vert
-  {
-    std::array<double, 3> p; //position
-
-    static inline double radius{1.0};
-
-    operator widget_object_instanced::vert() const noexcept
-    {
-      const double normalf = 32767.0 / std::sqrt(p[0]*p[0] + p[1]*p[1] + p[2]*p[2]);
-      const double posf    = radius  / std::sqrt(p[0]*p[0] + p[1]*p[1] + p[2]*p[2]);
-
-      return widget_object_instanced::vert{{static_cast<short>(posf*p[0]), static_cast<short>(posf*p[1]), static_cast<short>(posf*p[2])}, {static_cast<short>(normalf*p[0]), static_cast<short>(normalf*p[1]), static_cast<short>(normalf*p[2])}};
-    }
-
-    double_vert operator+(const double_vert r) const noexcept
-    {
-      return double_vert{{p[0]+r.p[0],p[1]+r.p[1],p[2]+r.p[2]}};
-    } 
-
-    double_vert operator*(const double d) const noexcept
-    {
-      return double_vert{{p[0]*d, p[1]*d, p[2]*d}};
-    } 
-
-    double_vert operator/(const double d) const noexcept
-    {
-      return double_vert{{p[0]/d, p[1]/d, p[2]/d}};
-    } 
-
-    static void set_radius(const double r) noexcept
-    {
-      radius = r;
-    }
-  };
-
-
-  /*consteval*/ std::vector<widget_object_instanced::vert> generate_sphere(const double radius, const int quality) noexcept
-  {
-    double_vert::set_radius(radius);
-
-    std::vector<double_vert> points;
-    std::vector<std::uint32_t> indexes;
-    std::vector<widget_object_instanced::vert> triangles;
-
-    if (quality > 0) //icosahedron
-    {
-      // phi (golden ratio)
-      const/*expr*/ double p = ((1.0 + std::sqrt(5.0))/2.0);
-
-      // all rotations of (0, +-1, +-phi))
-      points = {{
-        {{ 0,  1,  p}}, {{ 0,  1, -p}}, {{ 0, -1,  p}}, {{ 0, -1, -p}},
-        {{ 1,  p,  0}}, {{ 1, -p,  0}}, {{-1,  p,  0}}, {{-1, -p,  0}},
-        {{ p,  0,  1}}, {{-p,  0,  1}}, {{ p,  0, -1}}, {{-p,  0, -1}}
-      }};
-
-      indexes = {{
-        0, 4, 6,  1, 4, 6,                     // top 2
-        0, 4, 8,  1, 4,10,  0, 6, 9,  1, 6,11, // next 4
-
-        4, 8,10,  5, 8,10,  6, 9,11,  7, 9,11, // 2 vertical diamonds
-
-        0, 2, 8,  0, 2, 9,  1, 3,10,  1, 3,11, // 2 horizontal diamonds
-        
-        2, 5, 8,  3, 5,10,  2, 7, 9,  3, 7,11, // 4 connected to bottom 2
-        2, 5, 7,  3, 5, 7                      // bottom 2 
-      }};
-      
-      // each point used in 5 triangles of icosahedron
-      triangles.reserve(5 * points.size() * quality);
-    }
-    else if (quality == 0) //octahedron
-    {
-      points = {{ {{1, 0, 0}}, {{-1, 0, 0}}, {{0, 1, 0}}, {{0, -1, 0}}, {{0, 0, 1}}, {{0, 0, -1}} }};
-
-      indexes = {{ 0,2,4, 0,4,3, 0,3,5, 0,5,2, 1,4,2, 1,3,4, 1,5,3, 1,2,5 }};
-
-      // each point used in 4 triangles of tetrahedron
-      triangles.reserve(4 * points.size());
-    }
-    else //tetrahedron
-    {
-      // 1/sqrt2
-      const/*expr*/ double s = 1.0/std::sqrt(2.0);
-
-      points = {{ {{0, 1, s}}, {{0, -1, s}}, {{1, 0, -s}}, {{-1, 0, -s}} }};
-
-      indexes = {{ 0,1,2, 2,1,3, 2,3,0, 0,3,1 }};
-
-      // each point used in 3 triangles of tetrahedron
-      triangles.reserve(3 * points.size());
-    }
-
-    std::uint32_t split = std::max(quality, 1);
-
-    for (std::uint32_t i = 0; i < indexes.size(); i+=3)
-    {
-      auto p0 = points[indexes[i]];
-      auto p1 = points[indexes[i+1]];
-      auto p2 = points[indexes[i+2]];
-
-      // number of triangles in sphere is 20*split^2
-
-      // for each row
-      for (std::uint32_t i = 0; i < split; i++)
-      {
-        // first triangle in row
-        triangles.emplace_back(static_cast<widget_object_instanced::vert>(( p0*(split-i  )      + p2*i     )/split));
-        triangles.emplace_back(static_cast<widget_object_instanced::vert>(( p0*(split-i-1) + p1 + p2*i     )/split));
-        triangles.emplace_back(static_cast<widget_object_instanced::vert>(( p0*(split-i-1)      + p2*(i+1) )/split));
-        
-        // for each diamond in the row
-        for (std::uint32_t j = 1; j < split - i; j++)
-        {
-          triangles.emplace_back(static_cast<widget_object_instanced::vert>(( p0*(split-i-j)   + p1*j     + p2*i     )/split));
-          triangles.emplace_back(static_cast<widget_object_instanced::vert>(( p0*(split-i-1-j) + p1*j     + p2*(i+1) )/split));
-          triangles.emplace_back(static_cast<widget_object_instanced::vert>(( p0*(split-i-j)   + p1*(j-1) + p2*(i+1) )/split));
-
-          triangles.emplace_back(static_cast<widget_object_instanced::vert>(( p0*(split-i-j)   + p1*j     + p2*i     )/split));
-          triangles.emplace_back(static_cast<widget_object_instanced::vert>(( p0*(split-i-1-j) + p1*(j+1) + p2*i     )/split));
-          triangles.emplace_back(static_cast<widget_object_instanced::vert>(( p0*(split-i-1-j) + p1*j     + p2*(i+1) )/split));
-        }
-      }
-    }
-
-    return triangles;
-  }
-
-
-  void create_test_instanced() noexcept
-  {
-    if (pdb_list_.empty() || widget_object_instanced_)
-      return;
-
-    widget_object_instanced_ = ui_event_destination::make_ui<widget_object_instanced>(ui_, coords_, widget_object_,
-                                                                                    widget_object_->get_uniform_buffer());
-
-    auto v = generate_sphere(32768.0/400.0, -1);//50.0);
-    /*std::vector<widget_object_instanced::vert> v = {{
-      {{ -50, -50, 0 }, { 0, 1, 0 }},
-      {{ -50,  50, 0 }, { 0, 1, 0 }},
-      {{  50, -50, 0 }, { 32767, 0, 0 }},
-      {{   0,   0, 71}, { 0, 1, 0 }},
-      {{ -50,  50, 0 }, { 0, 1, 0 }},
-      {{  50, -50, 0 }, { 0, 1, 0 }}
-    }};*/
-
-
-    widget_object_instanced_->set_vertex(v, GL_TRIANGLES);
-
-/*
-    std::array<widget_object_instanced::inst, 4> i = {{
-      {{    0, 0, 0 }, { 100 }, { 255,   0,   0, 255 }},
-      {{ 1000, 0, 0 }, { 110 }, {   0, 255,   0, 255 }},
-      {{ 2000, 0, 0 }, { 120 }, {   0,   0, 255, 255 }},
-      {{ 3000, 0, 0 }, { 130 }, { 128, 128, 128, 255 }}
-    }};
-
-    widget_object_instanced_->set_instance(i);
-*/
-
-    if (local_)
-    {
-      ui_event::directory_load_file(item_, pdb_list_[0], [this, self{shared_from_this()}] (std::string&& pdb)
-      {
-        worker_->call("visualise_atoms", pdb, [this, self{shared_from_this()}] (std::span<char> d)
-        {
-          emscripten_webgl_make_context_current(ui_->ctx_);
-
-          std::span<widget_object_instanced::inst> s(reinterpret_cast<widget_object_instanced::inst*>(d.data()),
-                                                    d.size() / sizeof(widget_object_instanced::inst));
-
-          log_debug(FMT_COMPILE("received: {} atoms"), s.size());
-
-          widget_object_instanced_->set_instance(s);
-        });
-      });
-    }
-    else // remote
-    {
-      std::string u = url_ + item_ + "/" + pdb_list_[0];
-
-      worker_->call("visualise_atoms_url", u, [this, self{shared_from_this()}] (std::span<char> d)
-      {
-        emscripten_webgl_make_context_current(ui_->ctx_);
-
-        std::span<widget_object_instanced::inst> s(reinterpret_cast<widget_object_instanced::inst*>(d.data()),
-                                                   d.size() / sizeof(widget_object_instanced::inst));
-
-        log_debug(FMT_COMPILE("received: {} atoms"), s.size());
-
-        widget_object_instanced_->set_instance(s);
-      });
-    }
-  }
-  
-
   std::shared_ptr<plate::widget_text>         widget_title_;
   std::shared_ptr<plate::widget_text>         widget_loading_;
 
-  std::shared_ptr<plate::widget_object<vert, cols>> widget_object_;
-  std::shared_ptr<plate::widget_object_instanced>   widget_object_instanced_;
+  std::shared_ptr<plate::widget_object<vert_with_color>> widget_object_;
 
   std::weak_ptr<widget_control<widget_main>> widget_control_;
 
+  std::string loading_error_;
+
   bool playing_{true};
 
-  int display_style_{0};
-
-  struct frame
-  {
-    buffer<vert> vertex;
-    buffer<vert> vertex_strip;
-  };
-
-  std::vector<frame> store_; // each frame's vertex and vertex_strip buffer is stored here
-
-  std::queue<int> to_load_; // the order in which to request frames
-  int loaded_count_{0};
-
   int current_entry_{-1};
+  int total_frames_{0};
 
   int frame_direction_{1};
   float current_time_{0};
   float frame_time_{1.0/30.0}; // 30 fps
 
-  bool local_{false}; // whether we are loading local files or remote
-
+  bool is_remote_{true};
   std::string description_{}; // description of animation
 
-  std::string item_;                  // item to load (either a protein code if remote, or a local directory name)
-  std::vector<std::string> pdb_list_; // list of pdb files to display
-
+  std::string item_;   // item to load (either a protein code if remote, or a local directory name)
   std::string url_;    // location of remote pdb files
 
-  std::string script_; // the molauto script in use
+  std::vector<std::string> per_frame_files_;
+  int master_frame_id_;
 
-  buffer<cols> shared_vertex_colors_;        // for keeping the colors seperate from the vertices
-  buffer<cols> shared_vertex_strip_colors_;
-
-  std::unique_ptr<worker> worker_; // a multi-threaded worker for performaing background tasks
+  std::vector<std::shared_ptr<widget_layer<widget_main>>> layers_;
 
   constexpr static int control_height_ = 55;
 

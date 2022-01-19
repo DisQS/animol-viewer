@@ -107,6 +107,8 @@ static short current_colour_s_[4];
 
 static float res_ = 400.0; // fixme to calculate depending on heuristics for pdb values
 
+static int printed_already_ = 0;
+
 inline short to_short(float x)
 {
   return x * (32768.0 / res_);
@@ -129,6 +131,8 @@ void vertex_clear()
   counter_s_ = 0;
 
   strip_counter_ = 0;
+
+  printed_already_ = 0;
 }
 
 
@@ -352,6 +356,18 @@ void output_strip_f(float n0, float n1, float n2)
 }
 
 
+void print_out_of_space()
+{
+  if (printed_already_ != 0)
+    return;
+
+  printf("out of space\n");
+  printed_already_ = 1;
+
+  return;
+}
+
+
 void glVertex3d(float n0, float n1, float n2)
 {
   if (store_ == NULL)
@@ -380,7 +396,7 @@ void glVertex3d(float n0, float n1, float n2)
     case GL_TRIANGLES:
     {
       if (counter_ >= MAX_VERTEX)
-         printf("past counter: %d\n", counter_);
+         print_out_of_space();
       else
         output_triangle_f(n0, n1, n2);
 
@@ -391,7 +407,7 @@ void glVertex3d(float n0, float n1, float n2)
     case GL_QUAD_STRIP:
     {
       if (counter_s_ + 2 >= MAX_VERTEX)
-        printf("past counter_s: %d\n", counter_s_);
+        print_out_of_space();
       else
       {
         if (strip_counter_++ == 0 && counter_s_ > 0) // we are starting a strip and there was a previous strip
@@ -411,7 +427,7 @@ void glVertex3d(float n0, float n1, float n2)
     case GL_QUADS:
     {
       if (counter_ + 6 >= MAX_VERTEX)
-        printf("past counter: %d\n", counter_);
+        print_out_of_space();
       else
       {
         if (strip_counter_ < 3)
@@ -449,7 +465,7 @@ void glVertex3d(float n0, float n1, float n2)
       {
         if (counter_ + 3 >= MAX_VERTEX)
         {
-          printf("past counter: %d\n", counter_);
+          print_out_of_space();
           return;
         }
        
@@ -509,19 +525,6 @@ void glVertex3d(float n0, float n1, float n2)
       ++fan_counter_;
       return;
     }
-
-/*
-    case GL_QUAD_STRIP:
-    {
-      if (counter_s_ + 2 >= MAX_VERTEX)
-      {
-        printf("past counter_s: %d\n", counter_s_);
-        return;
-      }
-
-
-    }
-    */
 
     default:
       printf("Bad out_mode: %d\n", out_mode_);

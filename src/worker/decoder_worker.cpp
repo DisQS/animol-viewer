@@ -21,6 +21,18 @@ extern int molscript (int argc, char *argv[]);
 extern int compact(char** cdata, int options);
 
 
+float fast_float_c(const char* s)
+{
+  float f;
+
+  if (pdbmovie::string_data::parse_float(f, std::string_view{s, strlen(s)}))
+    return f;
+
+  printf("bad fast_float: >%s<\n", s);
+  return 0;
+}
+
+
 struct fp
 {
   short vert[3];

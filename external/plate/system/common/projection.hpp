@@ -65,6 +65,12 @@ public:
   }
 
 
+  inline float get_m() const noexcept
+  {
+    return std::max(width_, height_);
+  }
+
+
   void set(std::array<float, 16>& p) noexcept
   {
     matrix_base_ = p;
@@ -86,11 +92,11 @@ public:
     width_  = width;
     height_ = height;
 
-    float m = std::min(width_, height_);
+    float m = std::max(width_, height_);
 
     matrix_ = { 2 / width_, 0,            0,          0,
                 0,          2 / height_,  0,          0,
-                0,          0,           -1 / (8*m), -1 / m,   // depth size is 2 * (8 * m)
+                0,          0,           -1 / (8*m), -1 / (1*m),   // depth size is 2 * (8 * m)
                -1,         -1,            0,          1 };     // shift x any y by -1 (so 0,0 is at middle of canvas)
 
     matrix_base_ = matrix_;
@@ -103,11 +109,11 @@ public:
     width_  = width;
     height_ = height;
 
-    float m = std::min(width_, height_);
+    float m = std::max(width_, height_);
 
     matrix_ = { 2 / width_, 0,            0,         0,
                 0,          2 / height_,  0,         0,
-                0,          0,           -1 / (8*m), 0,   // no .w applied i.e, w = 1
+                0,          0,           -1 / (8*m), 0.000001,   // no .w applied i.e, w = 1
                -1,         -1,            0,         1 };
 
     matrix_base_ = matrix_;

@@ -25,23 +25,31 @@ public:
 
 
   void init(const std::shared_ptr<state>& _ui, const gpu::int_box& coords, std::uint32_t prop,
-                     const std::shared_ptr<ui_event_destination>& parent) noexcept
+                     const std::shared_ptr<ui_event_destination>& parent, buffer<shader_object::ubo>* ext = nullptr) noexcept
   {
-    direction_.set_to_default_angle();
-
     ui_event_destination::init(_ui, coords, prop, parent);
+    
+    if (ext)
+      ext_ubuf_ = ext;
+    else
+    {
+      direction_.set_to_default_angle();
 
-    upload_uniform();
+      upload_uniform();
+    }
   }
 
 
   void display() noexcept
 	{
-    if (!mouse_down_ && (x_speed_ != 0 || y_speed_ != 0))
-      apply_momentum();
+    if (!ext_ubuf_)
+    {
+      if (!mouse_down_ && (x_speed_ != 0 || y_speed_ != 0))
+        apply_momentum();
 
-    if (!display_geometry_)
-      return;
+      if (!display_geometry_)
+        return;
+    }
 
     glEnable(GL_DEPTH_TEST);
 
@@ -50,19 +58,22 @@ public:
 
     if (model_ptrs_.empty()) // use built in vertex
     {
-      if constexpr (std::is_same_v<bool, CTYPE>)
-        ui_->shader_object_->draw(ui_->projection_, bg, uniform_buffer_, vertex_buffer_);
-      else
-        ui_->shader_object_->draw(ui_->projection_, bg, uniform_buffer_, vertex_buffer_, vertex_color_buffer_);
+      if (vertex_buffer_.is_ready())
+      {
+        if constexpr (std::is_same_v<bool, CTYPE>)
+          ui_->shader_object_->draw(ui_->projection_, bg, ext_ubuf_ ? *ext_ubuf_ : ubuf_, vertex_buffer_);
+        else
+          ui_->shader_object_->draw(ui_->projection_, bg, ext_ubuf_ ? *ext_ubuf_ : ubuf_, vertex_buffer_, vertex_color_buffer_);
+      }
     }
     else // use supplied buffers
     {
       for (auto& m : model_ptrs_)
       {
         if constexpr (std::is_same_v<bool, CTYPE>)
-          ui_->shader_object_->draw(ui_->projection_, bg, uniform_buffer_, *m.vertex);
+          ui_->shader_object_->draw(ui_->projection_, bg, ext_ubuf_ ? *ext_ubuf_ : ubuf_, *m.vertex);
         else
-          ui_->shader_object_->draw(ui_->projection_, bg, uniform_buffer_, *m.vertex, *m.color);
+          ui_->shader_object_->draw(ui_->projection_, bg, ext_ubuf_ ? *ext_ubuf_ : ubuf_, *m.vertex, *m.color);
       }
     }
 
@@ -122,7 +133,7 @@ public:
 
   inline auto get_uniform_buffer() noexcept
   {
-    return &uniform_buffer_;
+    return &ubuf_;
   }
 
 
@@ -307,7 +318,7 @@ private:
 
   void upload_uniform()
   {
-    auto u = uniform_buffer_.allocate_staging(1);
+    auto u = ubuf_.allocate_staging(1);
 
     // assumes object is centred around 0,0,0
 
@@ -317,11 +328,13 @@ private:
     direction_.get_euler_angles(u->rot.x, u->rot.y, u->rot.z);
     u->rot.w = 0.0f;
 
-    uniform_buffer_.upload();
+    ubuf_.upload();
   }
 
 
-  buffer<shader_object::ubo> uniform_buffer_;
+  buffer<shader_object::ubo> ubuf_;
+
+  buffer<shader_object::ubo>* ext_ubuf_{nullptr}; // if we share a ubuf with an external object
 
   // A buffer can be owned by us, or buffers can be supplied
 

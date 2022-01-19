@@ -8,7 +8,7 @@ COMMON_SRCS = ../src/${NAME}.cpp
 MOLCLIBPATH   = ../external/molscript/code/clib
 MOLSCRIPTPATH = ../external/molscript/code
 
-MOLAUTO_SRCS   = aa_lookup.c mol3d_init.c dynstring.c mol3d.c named_data.c colour.c element_lookup.c mol3d_secstruc.c mol3d_utils.c vector3.c str_utils.c io_utils.c key_value.c double_hash.c mol3d_io.c quaternion.c matrix3.c mol3d_chain.c hermite_curve.c indent.c extent3d.c args.c fast_atof.c
+MOLAUTO_SRCS   = aa_lookup.c mol3d_init.c dynstring.c mol3d.c named_data.c colour.c element_lookup.c mol3d_secstruc.c mol3d_utils.c vector3.c str_utils.c io_utils.c key_value.c double_hash.c mol3d_io.c quaternion.c matrix3.c mol3d_chain.c hermite_curve.c indent.c extent3d.c args.c
 
 MOLSCRIPT_SRCS = molscript.tab.c global.c lex.c col.c select.c state.c graphics.c segment.c coord.c xform.c vertex.c molauto.c ogl_body.c body3d.c
 
@@ -25,7 +25,7 @@ POST_JS = ../external/plate/system/webgl/post.js
 CC=emcc
 CFLAGS=-std=c++20 -O3 -flto -DNDEBUG -I ../src/ -I ../external/include/ -I../external/plate/ -DPLATE -DPLATE_WEBGL -I${MOLCLIBPATH}/ -I${MOLSCRIPTPATH}/
 
-EFLAGS=-O3 -DNDEBUG -flto -DVERTEX_SUPPORT -DCUSTOM_ATOF=fast_atof
+EFLAGS=-O3 -DNDEBUG -flto -DVERTEX_SUPPORT -DCUSTOM_ATOF=fast_float_c
 
 # single threaded, webgl1
 
@@ -152,6 +152,7 @@ $(MOLSCRIPTOUTPUT)/body3d.o: $(MOLCLIBPATH)/body3d.c
 .PHONY: default
 
 $(NAME).js: $(COMMON_SRCS)
+	cd ../external/plate && make && cd ../../build
 	$(CC) $(CFLAGS) $(COMMON_SRCS) $(OPTIONS) -o $(NAME).js
 	cat ${POST_JS} >> ${NAME}.js
 
@@ -159,7 +160,7 @@ install:
 	./install.sh $(server)
 
 decoder_worker.js: ../src/worker/decoder_worker.cpp $(MOLAUTO_OBJS) $(MOLSCRIPT_OBJS)
-	$(CC) $(CFLAGS) $(MOLAUTO_OBJS) $(MOLSCRIPT_OBJS) -s EXPORTED_FUNCTIONS="['_visualise_atoms', '_visualise_atoms_url', '_end_worker', '_script', '_script_with', '_decode_url_color_interleaved', '_decode_url_color_non_interleaved','_decode_url_no_color','_decode_contents_color_interleaved','_decode_contents_color_non_interleaved','_decode_contents_no_color']" -s BUILD_AS_WORKER=1 -s FILESYSTEM=1 -s FETCH=1 -s DISABLE_EXCEPTION_CATCHING=1 -s ALLOW_MEMORY_GROWTH=1 --bind --closure 1 -o decoder_worker.js ../src/worker/decoder_worker.cpp
+	$(CC) $(CFLAGS) $(MOLAUTO_OBJS) $(MOLSCRIPT_OBJS) -s EXPORTED_FUNCTIONS="['_fast_float_c', '_visualise_atoms', '_visualise_atoms_url', '_end_worker', '_script', '_script_with', '_decode_url_color_interleaved', '_decode_url_color_non_interleaved','_decode_url_no_color','_decode_contents_color_interleaved','_decode_contents_color_non_interleaved','_decode_contents_no_color']" -s BUILD_AS_WORKER=1 -s FILESYSTEM=1 -s FETCH=1 -s DISABLE_EXCEPTION_CATCHING=1 -s ALLOW_MEMORY_GROWTH=1 --bind --closure 1 -o decoder_worker.js ../src/worker/decoder_worker.cpp
 
 clean:
 	rm -f $(NAME).js $(NAME).wasm

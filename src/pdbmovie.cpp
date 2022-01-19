@@ -106,7 +106,7 @@ private:
 
     // start main widget
 
-    w_ = plate::ui_event_destination::make_ui<pdbmovie::widget_main<false>>(s_, b, url_, code_, description_);
+    w_ = plate::ui_event_destination::make_ui<pdbmovie::widget_main>(s_, b, url_, code_, description_);
   }
 
 
@@ -116,7 +116,7 @@ private:
   std::string code_;
   std::string description_;
 
-  std::shared_ptr<pdbmovie::widget_main<false>> w_;
+  std::shared_ptr<pdbmovie::widget_main> w_;
 
 }; // class movie
 

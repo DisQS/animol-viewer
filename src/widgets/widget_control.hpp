@@ -99,10 +99,12 @@ public:
       widget_play_->disconnect_from_parent();
       widget_pause_->disconnect_from_parent();
       widget_menu_->disconnect_from_parent();
+      widget_layers_->disconnect_from_parent();
 
       widget_play_.reset();
       widget_pause_.reset();
       widget_menu_.reset();
+      widget_layers_.reset();
 
       create_buttons();
     }
@@ -262,6 +264,11 @@ private:
                { coords_.p2.x, coords_.p1.y + static_cast<int>(2*spacing) + sz } };
 
     widget_menu_->set_geometry(coords);
+
+    coords = { { coords_.p2.x - ((2*x_off) + sz) * 3, coords_.p1.y },
+               { coords_.p2.x - ((2*x_off) + sz) * 2, coords_.p1.y + static_cast<int>(2*spacing) + sz } };
+
+    widget_layers_->set_geometry(coords);
   }
 
 
@@ -415,6 +422,30 @@ private:
     {
       user_interacted();
       create_menu();
+    });
+
+    // layers
+
+    button_coords = { { coords_.p2.x - ((2*x_off) + sz) * 3, coords_.p1.y },
+                      { coords_.p2.x - ((2*x_off) + sz) * 2, coords_.p1.y + static_cast<int>(2*top_spacing) + sz } };
+
+    std::array<shader_basic::basic_vertex, 3> v_layers =
+    {{
+      {x_off + spacing * 1.0f, spacing * 2.0f, 0.0f, 1.0f},
+      {x_off + spacing * 3.0f, spacing * 5.0f, 0.0f, 1.0f},
+      {x_off + spacing * 5.0f, spacing * 2.0f, 0.0f, 1.0f}
+    }};
+
+    widget_layers_ = ui_event_destination::make_ui<widget_basic_vertex>(ui_, button_coords,
+                                                    shared_from_this(), ui_->txt_color_, v_layers);
+
+    widget_layers_->set_click_cb([this] ()
+    {
+      user_interacted();
+
+      // send a p key_event to toggle view
+
+      viewer_->key_event(ui_event::KeyEvent::KeyEventDown, "p", "KeyP", ui_event::KeyModNone);
     });
 
     update_buttons();
@@ -733,11 +764,12 @@ private:
       widget_frame_num_.reset();
     }
   }
-  
+
 
   std::shared_ptr<widget_basic_vertex> widget_play_;
   std::shared_ptr<widget_basic_vertex> widget_pause_;
   std::shared_ptr<widget_basic_vertex> widget_menu_;
+  std::shared_ptr<widget_basic_vertex> widget_layers_;
 
   std::shared_ptr<widget_box>    widget_slider_;
   std::shared_ptr<widget_box>    widget_slider_played_;

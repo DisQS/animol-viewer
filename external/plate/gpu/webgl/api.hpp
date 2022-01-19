@@ -20,6 +20,7 @@
 #include "shaders/text_msdf/shader.hpp"
 #include "shaders/object/shader.hpp"
 #include "shaders/object_instanced/shader.hpp"
+#include "shaders/spheres/shader.hpp"
 //#include "shaders/example_geom/shader.hpp"
 //#include "shaders/circle/shader.hpp"
 #include "shaders/rounded_box/shader.hpp"
@@ -203,6 +204,7 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
   s->shader_text_msdf_              = new shader_text_msdf(true, s->version_);
   s->shader_object_                 = new shader_object(true);
   s->shader_object_instanced_       = new shader_object_instanced(true);
+  s->shader_spheres_                = new shader_spheres();
 //  s->shader_example_geom_           = new shader_example_geom(true);
 //  s->shader_circle_                 = new shader_circle(true, s->version_);
   s->shader_rounded_box_            = new shader_rounded_box(true, s->version_);
@@ -214,6 +216,7 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
   s->shader_text_msdf_->link();
   s->shader_object_->link();
   s->shader_object_instanced_->link();
+  s->shader_spheres_->link();
 //  s->shader_example_geom_->link();
 //  s->shader_circle_->link();
   s->shader_rounded_box_->link();
@@ -225,6 +228,7 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
   s->shader_text_msdf_->check();
   s->shader_object_->check();
   s->shader_object_instanced_->check();
+  s->shader_spheres_->check();
 //  s->shader_example_geom_->check();
 //  s->shader_circle_->check();
   s->shader_rounded_box_->check();
@@ -234,6 +238,8 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
 
   glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 	glEnable(GL_BLEND);
+
+  //glDepthFunc(GL_LEQUAL);
 
   windows_.emplace_back(s->ctx_, s);
 
