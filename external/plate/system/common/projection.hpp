@@ -23,6 +23,8 @@ class projection
 
 public:
 
+  enum class view { orthogonal, perspective };
+
   using proj_store = std::array<float, 16>;
 
   proj_store matrix_base_; // the raw projection matrix
@@ -32,12 +34,12 @@ public:
   float height_;
 
 
-  void set_orthogonal(bool o, anim* a = nullptr) noexcept
+  void set_view(view v, anim* a = nullptr) noexcept
   {
-    if (o == use_orthogonal_)
+    if (v == view_)
       return;
 
-    use_orthogonal_ = o;
+    view_ = v;
 
     if (a)
     {
@@ -61,7 +63,12 @@ public:
 
   inline bool is_orthogonal() const noexcept
   {
-    return use_orthogonal_;
+    return view_ == view::orthogonal;
+  }
+
+  inline view get_view() const noexcept
+  {
+    return view_;
   }
 
 
@@ -80,7 +87,7 @@ public:
 
   inline void set(int width, int height) noexcept
   {
-    if (use_orthogonal_)
+    if (view_ == view::orthogonal)
       set_orthogonal(width, height);
     else
       set_perspective(width, height);
@@ -171,7 +178,7 @@ private:
   std::array<proj_store, max_stack_size_> stack_;
   int stack_size_{0};
 
-  bool use_orthogonal_{false};
+  view view_{view::perspective};
 
   float anim_w_;
 

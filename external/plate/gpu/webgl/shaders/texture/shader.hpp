@@ -30,41 +30,19 @@ public:
   };
 
 
-  shader_texture()
-  {
-    if (auto r = build_program({reinterpret_cast<const char*>(texture_gl_vert), texture_gl_vert_len},
-                               {reinterpret_cast<const char*>(texture_gl_frag), texture_gl_frag_len}); !r)
-      return;
-    else
-    { 
-      vertex_shader_   = r->vertex_shader_id;
-      fragment_shader_ = r->fragment_shader_id;
-      program_         = r->program_id;
-    }
-
-    attrib_position_  = glGetAttribLocation   (program_, "position");
-    attrib_tex_coord_ = glGetAttribLocation   (program_, "tex_coord");
-
-    uniform_tex_      = glGetUniformLocation  (program_, "tex");
-
-    uniform_proj_    = glGetUniformLocation(program_, "proj");
-    uniform_offset_  = glGetUniformLocation(program_, "offset");
-    uniform_rot_     = glGetUniformLocation(program_, "rot");
-    uniform_scale_   = glGetUniformLocation(program_, "scale");
-  };
-
   shader_texture(bool compile) noexcept
   {
-    if (compile)
-      std::tie(vertex_shader_, fragment_shader_) = plate::compile(
-                                {reinterpret_cast<const char*>(texture_gl_vert), texture_gl_vert_len},
-                                {reinterpret_cast<const char*>(texture_gl_frag), texture_gl_frag_len});
-  };
+    std::tie(vertex_shader_, fragment_shader_) = plate::compile(
+                              {reinterpret_cast<const char*>(texture_gl_vert), texture_gl_vert_len},
+                              {reinterpret_cast<const char*>(texture_gl_frag), texture_gl_frag_len});
+  }
+
 
   void link() noexcept
   {
     program_ = plate::link(vertex_shader_, fragment_shader_);
-  };
+  }
+
 
   bool check() noexcept
   {
@@ -77,16 +55,17 @@ public:
     uniform_tex_      = glGetUniformLocation  (program_, "tex");
 
     uniform_proj_    = glGetUniformLocation(program_, "proj");
+    uniform_alpha_   = glGetUniformLocation(program_, "alpha");
     uniform_offset_  = glGetUniformLocation(program_, "offset");
     uniform_rot_     = glGetUniformLocation(program_, "rot");
     uniform_scale_   = glGetUniformLocation(program_, "scale");
 
     return true;
-  };
+  }
 
 
   template<class V>
-  void draw(const projection& p, buffer<ubo>& uniform_buffer, const buffer<V>& vbuf, const texture& tex)
+  void draw(const projection& p, float alpha, buffer<ubo>& uniform_buffer, const buffer<V>& vbuf, const texture& tex)
   {
     auto u = uniform_buffer.map_staging();
 
@@ -94,6 +73,7 @@ public:
 
     glUniformMatrix4fv(uniform_proj_, 1, GL_FALSE, p.matrix_.data());
 
+    glUniform1f(uniform_alpha_,  alpha);
     glUniform4f(uniform_offset_, u->offset.x, u->offset.y, 0.0, 0.0);
     glUniform4f(uniform_rot_,    u->rot.x, u->rot.y, u->rot.z, u->rot.a);
     glUniform2f(uniform_scale_,  u->scale.x, u->scale.y);
@@ -116,7 +96,7 @@ public:
 
     glBindTexture(GL_TEXTURE_2D, tex.get_id());
 
-    glDrawArrays(vbuf.get_mode(), 0, vbuf.count_); // GL_TRIANGLE_STRIP?
+    glDrawArrays(vbuf.get_mode(), 0, vbuf.count_);
 
     glDisableVertexAttribArray(attrib_position_);
     glDisableVertexAttribArray(attrib_tex_coord_);
@@ -135,6 +115,7 @@ private:
   GLint  attrib_tex_coord_ = 0;
 
   GLint  uniform_proj_     = 0;
+  GLint  uniform_alpha_    = 0;
   GLint  uniform_offset_   = 0;
   GLint  uniform_rot_      = 0;
   GLint  uniform_scale_    = 0;

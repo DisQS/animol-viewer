@@ -131,6 +131,16 @@ public:
   }
 
 
+  void clear_selection() noexcept
+  {
+    if (wbox_selection_)
+    {
+      wbox_selection_->disconnect_from_parent();
+      wbox_selection_.reset();
+    }
+  }
+
+
   void ui_out() noexcept
   {
     //log_debug("texture got mouse out");

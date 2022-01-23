@@ -31,7 +31,7 @@ public:
   {
     plate::ui_event_destination::init(_ui, coords, plate::ui_event_destination::Prop::Display, parent);
 
-    main_   = main;
+    main_ = main;
 
     start();
   }
@@ -104,51 +104,37 @@ private:
 
     auto per_frame_files = main_->get_frame_files();
 
+    std::string u;
+
     if (main_->is_remote())
+      u = main_->get_url() + main_->get_item() + "/" + per_frame_files[to_load];
+    else
+      u = per_frame_files[to_load];
+
+    main_->worker_->call("visualise_atoms_url", u, [this, wself{this->weak_from_this()}, entry = to_load] (std::span<char> d)
     {
-      std::string u = main_->get_url() + main_->get_item() + "/" + per_frame_files[to_load];
-
-      main_->worker_->call("visualise_atoms_url", u, [this, wself{this->weak_from_this()}, entry = to_load] (std::span<char> d)
+      if (auto w = wself.lock())
       {
-        if (auto w = wself.lock())
-        {
-          emscripten_webgl_make_context_current(this->ui_->ctx_);
+        emscripten_webgl_make_context_current(this->ui_->ctx_);
 
-          std::span<plate::widget_spheres::inst> s(reinterpret_cast<plate::widget_spheres::inst*>(d.data()), d.size() /
-                                                                                           sizeof(plate::widget_spheres::inst));
+        std::span<plate::widget_spheres::inst> s(reinterpret_cast<plate::widget_spheres::inst*>(d.data()), d.size() /
+                                                                                         sizeof(plate::widget_spheres::inst));
 
-          process_frame(entry, s);
-        }
-      });
-    }
-    else // local
-    {
-      plate::ui_event::directory_load_file(main_->get_item(), per_frame_files[to_load],
-                                      [this, wself{this->weak_from_this()}, entry = to_load] (std::string&& pdb)
-      {
-        if (auto w = wself.lock())
-        {
-          main_->worker_->call("visualise_atoms", pdb, [this, wself, entry] (std::span<char> d)
-          {
-            if (auto w = wself.lock())
-            {
-              emscripten_webgl_make_context_current(this->ui_->ctx_);
-
-              std::span<plate::widget_spheres::inst> s(reinterpret_cast<plate::widget_spheres::inst*>(d.data()), d.size() /
-                                                                                          sizeof(plate::widget_spheres::inst));
-
-              process_frame(entry, s);
-            }
-          });
-        }
-      });
-    }
+        process_frame(entry, s);
+      }
+    });
   }
 
 
   void process_frame(int entry, std::span<plate::widget_spheres::inst> s) noexcept
   {
-    if (main_->get_scale() == 1.0)
+    if (s.empty())
+    {
+      main_->set_error("Failed to process");
+      return;
+    }
+
+    if (!main_->scale_has_been_set())
     {
       int max = 0;
 
@@ -164,10 +150,6 @@ private:
       if (max)
         main_->set_scale((std::min(this->my_width(), this->my_height())/2.0) * (32'768.0 / max) * 0.8);
     }
-    else
-    { 
-      log_debug(FMT_COMPILE("received: {} atoms"), s.size());
-    }
 
     store_[entry].ibuf.upload(s.data(), s.size());
 
@@ -177,11 +159,9 @@ private:
     ++loaded_count_;
 
     if (loaded_count_ == main_->get_total_frames())
-    {
-      log_debug(FMT_COMPILE("all loaded: {}"), loaded_count_);
-    }
+      log_debug(FMT_COMPILE("all loaded: {} atoms: {}"), loaded_count_, s.size());
 
-    main_->set_loading();
+    main_->update_loading();
 
     process_next();
   }

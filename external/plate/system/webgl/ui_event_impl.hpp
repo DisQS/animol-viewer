@@ -297,9 +297,6 @@ bool have_file_system_access_support()
 
 EM_JS(void, js_open_file_show_picker, (std::uint32_t cb),
 {
-  if (typeof window["Plate"]["files_handles"] === 'undefined')
-    window["Plate"]["files_handles"] = new Map();
-
   const options =
   {
     types: [
@@ -317,17 +314,25 @@ EM_JS(void, js_open_file_show_picker, (std::uint32_t cb),
 
   window.showOpenFilePicker(options).then (handle =>
   {
-    var files_list = ""; // string of files seperated by '\n'
+    let files_list = ""; // string of files seperated by '\n'
 
-    handle.forEach(item =>
+    function to_url(i)
     {
-      window["Plate"]["files_handles"].set(item.name, item);
+      handle[i].getFile().then (file =>
+      {
+        files_list += window.URL.createObjectURL(file) + "\n";
 
-      files_list += item.name;
-      files_list += "\n";
-    });
+        if (i < handle.length - 1)
+          to_url(i + 1);
+        else
+          window["Plate"]["f_open_file_show_picker_cb"](cb, files_list);
+      });
+    }
 
-    window["Plate"]["f_open_file_show_picker_cb"](cb, files_list);
+    if (handle.length == 0)
+      window["Plate"]["f_open_file_show_picker_cb"](cb, "");
+    else
+      to_url(0);
 
   }).catch (e =>
   {
@@ -379,6 +384,20 @@ void open_file_load_file(std::string_view name, std::function<void (std::string&
 
   js_open_file_load_file(name.data(), name.size(), reinterpret_cast<std::uint32_t>(f),
                                                    reinterpret_cast<std::uint32_t>(s));
+}
+
+
+EM_JS(void, js_clear_file_object, (const char* fname, int fname_len),
+{
+  var file = UTF8ToString(fname, fname_len);
+
+  window.URL.revokeObjectURL(file);
+});
+
+
+void clear_file_object(std::string_view s) noexcept
+{
+  js_clear_file_object(s.data(), s.size());
 }
 
 
@@ -1105,8 +1124,6 @@ void f_open_file_show_picker_cb(std::uint32_t cb, std::string filelist)
     if (end - start > 0)
       files.push_back(filelist.substr(start, end - start));
   }
-
-  std::sort(files.begin(), files.end());
 
   if (f)
   {

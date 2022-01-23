@@ -4,6 +4,9 @@
 #include <algorithm>
 #include <math.h>
 
+#include "json/json.hpp"
+
+
 namespace plate {
 
 class quaternion {
@@ -12,6 +15,8 @@ class quaternion {
 // interactive video lessons:  https://eater.net/quaternions
 
 public:
+
+  friend fmt::formatter<quaternion>;
 
   constexpr quaternion() noexcept
   { }
@@ -228,7 +233,24 @@ public:
     z = (float)atan2( 2.0 * ( w_ * z_ + x_ * y_ ), 1.0 - 2.0 * ( (y_ * y_) + (z_ * z_) ) );
   }
 
+
+  bool set_to_json(std::string_view s) noexcept
+  {
+    std::array<json_handler_funcs::lookup, 5> cbs =
+    {{
+      { "i",          true, [&] (std::string_view s) -> bool { return convert(x_,          s); } },
+      { "j",          true, [&] (std::string_view s) -> bool { return convert(y_,          s); } },
+      { "k",          true, [&] (std::string_view s) -> bool { return convert(z_,          s); } },
+      { "w",          true, [&] (std::string_view s) -> bool { return convert(w_,          s); } },
+      { "normalized", true, [&] (std::string_view s) -> bool { return convert(normalized_, s); } }
+    }};
+
+    return json_parse_funcs(s, cbs).ok;
+  }
+
+
 private:
+
 
   double x_, y_, z_, w_; // i, j, k, 1
   bool normalized_ = false;
@@ -237,3 +259,20 @@ private:
 
 
 } // namespace plate
+
+template<>
+struct fmt::formatter<plate::quaternion>
+{
+  constexpr auto parse(format_parse_context& ctx)
+  {
+    return ctx.begin(); // there are no options
+  }
+
+  template<typename FormatContext>
+  auto format(const plate::quaternion& q, FormatContext& ctx)
+  {
+    return format_to(ctx.out(), FMT_COMPILE(R"({{ "i":{}, "j":{}, "k":{}, "w":{}, "normalized":{} }})"),
+                                q.x_, q.y_, q.z_, q.w_, q.normalized_ ? "true" : "false");
+  }
+};
+

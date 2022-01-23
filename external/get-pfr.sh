@@ -13,6 +13,7 @@ pushd  pfr
     exit 1
   fi
 
+  mkdir -p ../include
   cp -rp include/*  ../include/
 
 popd

@@ -9,6 +9,8 @@
 #include "../gpu/shader_object.hpp"
 #include "../gpu/webgl/buffer.hpp"
 
+#include "../system/common/json/json.hpp"
+
 
 namespace plate {
 
@@ -22,6 +24,8 @@ class widget_object : public ui_event_destination
   using Col  = buffer<CTYPE>;
 
 public:
+
+  friend fmt::formatter<plate::widget_object<VTYPE, CTYPE>>;
 
 
   void init(const std::shared_ptr<state>& _ui, const gpu::int_box& coords, std::uint32_t prop,
@@ -140,6 +144,37 @@ public:
   void set_user_interacted_cb(std::function<void ()> cb) noexcept
   {
     interaction_cb_ = std::move(cb);
+  }
+
+
+  // for json 
+
+  struct json_widget_object
+  {
+    std::string_view direction;
+    float            scale;
+
+    static constexpr std::array<std::string_view, 2> lookup_ = {{ "direction", "scale" }};
+    static constexpr std::uint64_t must_ = mask_of(std::array<std::string_view, 2>{{ "direction", "scale" }}, lookup_);
+    static constexpr std::uint64_t may_  = 0;
+  };
+
+
+  bool set_to_json(std::string_view s) noexcept
+  {
+    auto h = json_parse_struct<json_widget_object>(s);
+
+    if (!h.ok)
+      return false;
+
+    scale_ = h.data.scale;
+
+    if (!direction_.set_to_json(h.data.direction))
+      return false;
+
+    upload_uniform();
+
+    return true;
   }
 
 
@@ -368,3 +403,20 @@ private:
 }; // widget_object
 
 } // namespace plate
+
+
+template <typename VTYPE, typename CTYPE>
+struct fmt::formatter<plate::widget_object<VTYPE, CTYPE>>
+{
+  constexpr auto parse(format_parse_context& ctx)
+  {
+    return ctx.begin(); // there are no options
+  }
+
+  template<typename FormatContext>
+  auto format(const plate::widget_object<VTYPE, CTYPE>& w, FormatContext& ctx)
+  {
+    return format_to(ctx.out(), FMT_COMPILE(R"({{ "direction":{}, "scale":{} }})"), w.direction_, w.scale_);
+  }
+};
+

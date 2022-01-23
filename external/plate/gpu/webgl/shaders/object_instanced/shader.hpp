@@ -156,6 +156,7 @@ public:
       glDisableVertexAttribArray(attrib_normal_);
 
       glDisableVertexAttribArray(attrib_offset_);
+      glDisableVertexAttribArray(attrib_scale_);
       glDisableVertexAttribArray(attrib_color_);
     }
 

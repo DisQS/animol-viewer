@@ -39,7 +39,7 @@ public:
   {
     plate::ui_event_destination::init(_ui, coords, plate::ui_event_destination::Prop::Display, parent);
 
-    main_   = main;
+    main_ = main;
 
     start();
   }
@@ -101,110 +101,62 @@ private:
 
   void generate_script() noexcept
   {
+    // request the worker to download the pdb file and generate the script
+
+    auto per_frame_files = main_->get_frame_files();
+
+    std::string u;
+
     if (main_->is_remote())
+      u = main_->get_url() + main_->get_item() + "/" + per_frame_files[main_->get_master_frame_id()];
+    else
+      u = per_frame_files[main_->get_master_frame_id()];
+
+    main_->worker_->call("script", u, [this, wself{this->weak_from_this()} ] (std::span<char> d)
     {
-      // request the worker to download the pdb file and generate the script
-
-      auto per_frame_files = main_->get_frame_files();
-
-      std::string u = main_->get_url() + main_->get_item() + "/" + per_frame_files[main_->get_master_frame_id()];
-
-      main_->worker_->call("script", u, [this, wself{this->weak_from_this()} ] (std::span<char> d)
+      if (auto w = wself.lock())
       {
-        if (auto w = wself.lock())
-        {
-          script_ = std::string(d.data(), d.size());
+        script_ = std::string(d.data(), d.size());
 
-          get_first_frame();
-        }
-      });
-    }
-    else // is local
-    {
-      // load in file and then request the worker to generate the script
+        get_first_frame();
+      }
+    });
 
-      auto per_frame_files = main_->get_frame_files();
-
-      log_debug(FMT_COMPILE("about to load local: {} {}"), main_->get_item(), per_frame_files[main_->get_master_frame_id()]);
-
-      plate::ui_event::directory_load_file(main_->get_item(), per_frame_files[main_->get_master_frame_id()],
-                                                          [this, wself{this->weak_from_this()}] (std::string&& pdb)
-      {
-        log_debug("loaded file");
-        if (auto w = wself.lock())
-        {
-          main_->worker_->call("script_with", pdb, [this, wself, pdb] (std::span<char> d)
-          {
-            log_debug("scripted file");
-            if (auto w = wself.lock())
-            {
-              script_ = std::string(d.data(), d.size());
-
-              get_first_frame(pdb);
-            }
-          });
-        }
-      });
-    }
-
-    main_->set_loading();
+    main_->update_loading();
   }
 
 
   void get_first_frame(std::string_view pdb = "") noexcept
   {
     // script has been generated, so run the decoder with the main frame,
-    //
-    // once the main frame has been generated, upload the script to all the workers and start processing the subsequent frames
+
+    auto per_frame_files = main_->get_frame_files();
+
+    std::string u;
 
     if (main_->is_remote())
+      u = main_->get_url() +main_->get_item() + "/" + per_frame_files[main_->get_master_frame_id()];
+    else
+      u = per_frame_files[main_->get_master_frame_id()];
+
+    std::vector<char> data_to_send(4);
+
+    std::uint32_t script_size = script_.size();
+
+    std::memcpy(data_to_send.data(), &script_size, 4);
+
+    data_to_send.insert(data_to_send.end(), script_.begin(), script_.end());
+    data_to_send.insert(data_to_send.end(),       u.begin(),       u.end());
+
+    main_->worker_->call("decode_url_color_interleaved", data_to_send, [this, wself{this->weak_from_this()} ] (std::span<char> d)
     {
-      auto per_frame_files = main_->get_frame_files();
-
-      std::string u = main_->get_url() +main_->get_item() + "/" + per_frame_files[main_->get_master_frame_id()];
-
-      std::vector<char> data_to_send(4);
-
-      std::uint32_t script_size = script_.size();
-
-      std::memcpy(data_to_send.data(), &script_size, 4);
-
-      data_to_send.insert(data_to_send.end(), script_.begin(), script_.end());
-      data_to_send.insert(data_to_send.end(),       u.begin(),       u.end());
-
-      main_->worker_->call("decode_url_color_interleaved", data_to_send,
-        [this, wself{this->weak_from_this()} ] (std::span<char> d)
+      if (auto w = wself.lock())
       {
-        if (auto w = wself.lock())
-        {
-          emscripten_webgl_make_context_current(this->ui_->ctx_);
+        emscripten_webgl_make_context_current(this->ui_->ctx_);
 
-          process_main_frame(d);
-        }
-      });
-    }
-    else // local
-    {
-      std::vector<char> data_to_send(4);
-        
-      std::uint32_t script_size = script_.size();
-        
-      std::memcpy(data_to_send.data(), &script_size, 4);
-        
-      data_to_send.insert(data_to_send.end(), script_.begin(), script_.end());
-      data_to_send.insert(data_to_send.end(),     pdb.begin(),     pdb.end());
-        
-      main_->worker_->call("decode_contents_color_interleaved", data_to_send,
-        [this, wself{this->weak_from_this()}] (std::span<char> d)
-      {
-        if (auto w = wself.lock())
-        {
-          emscripten_webgl_make_context_current(this->ui_->ctx_);
-
-          process_main_frame(d);
-        }
-      });
-    }
+        process_main_frame(d);
+      }
+    });
   }
 
 
@@ -218,56 +170,31 @@ private:
 
     auto per_frame_files = main_->get_frame_files();
 
+    std::string u;
+
     if (main_->is_remote())
+      u = main_->get_url() + main_->get_item() + "/" + per_frame_files[to_load];
+    else
+      u = per_frame_files[to_load];
+
+    std::vector<char> data_to_send(4);
+
+    std::uint32_t script_size = script_.size();
+
+    std::memcpy(data_to_send.data(), &script_size, 4);
+
+    data_to_send.insert(data_to_send.end(), script_.begin(), script_.end());
+    data_to_send.insert(data_to_send.end(),       u.begin(),       u.end());
+
+    main_->worker_->call("decode_url_color_interleaved", data_to_send,
+                                    [this, wself{this->weak_from_this()}, entry = to_load] (std::span<char> d)
     {
-      std::string u = main_->get_url() + main_->get_item() + "/" + per_frame_files[to_load];
-
-      std::vector<char> data_to_send(4);
-
-      std::uint32_t script_size = script_.size();
-
-      std::memcpy(data_to_send.data(), &script_size, 4);
-
-      data_to_send.insert(data_to_send.end(), script_.begin(), script_.end());
-      data_to_send.insert(data_to_send.end(),       u.begin(),       u.end());
-
-      main_->worker_->call("decode_url_color_interleaved", data_to_send,
-                                      [this, wself{this->weak_from_this()}, entry = to_load] (std::span<char> d)
+      if (auto w = wself.lock())
       {
-        if (auto w = wself.lock())
-        {
-          emscripten_webgl_make_context_current(this->ui_->ctx_);
-          process_decoded(entry, d);
-        }
-      });
-    }
-    else // local
-    {
-      plate::ui_event::directory_load_file(main_->get_item(), per_frame_files[to_load],
-                                      [this, wself{this->weak_from_this()}, entry = to_load] (std::string&& pdb)
-      {
-        if (auto w = wself.lock())
-        {
-          std::vector<char> data_to_send(4);
-
-          std::uint32_t script_size = script_.size();
-
-          std::memcpy(data_to_send.data(), &script_size, 4);
-
-          data_to_send.insert(data_to_send.end(), script_.begin(), script_.end());
-          data_to_send.insert(data_to_send.end(),     pdb.begin(),     pdb.end());
-
-          main_->worker_->call("decode_contents_color_interleaved", data_to_send, [this, wself, entry] (std::span<char> d)
-          {
-            if (auto w = wself.lock())
-            {
-              emscripten_webgl_make_context_current(this->ui_->ctx_);
-              process_decoded(entry, d);
-            }
-          });
-        }
-      });
-    }
+        emscripten_webgl_make_context_current(this->ui_->ctx_);
+        process_decoded(entry, d);
+      }
+    });
   }
 
 
@@ -335,7 +262,7 @@ private:
 
     // loop through data to find protein width
 
-    if (main_->get_scale() == 1.0)
+    if (!main_->scale_has_been_set())
     {
       p = reinterpret_cast<std::byte*>(d.data()) + sizeof(compact_header);
 
@@ -377,7 +304,7 @@ private:
       log_debug(FMT_COMPILE("all loaded: {}"), loaded_count_);
     }
 
-    main_->set_loading();
+    main_->update_loading();
   }
 
 

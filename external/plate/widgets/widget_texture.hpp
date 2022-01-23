@@ -86,76 +86,66 @@ public:
       }
     );
   }
+
+
+  void set_click_cb(std::function<void ()> cb) noexcept
+  {
+    set_input();
+    click_cb_ = std::move(cb);
+  }
   
 
-  void display() noexcept
+  void display() noexcept override
   {
     if (!texture_.ready()) [[unlikely]]
       return;
 
-    ui_->shader_texture_->draw(ui_->projection_, uniform_buffer_, vertex_buffer_, texture_);
+    ui_->shader_texture_->draw(ui_->projection_, ui_->alpha_.alpha_, uniform_buffer_, vertex_buffer_, texture_);
   }
 
 
-  void ui_out() noexcept
+  void set_geometry(const gpu::int_box& coords) noexcept override
   {
-    log_debug("texture got mouse out");
+    ui_event_destination::set_geometry(coords);
+
+    upload_uniform();
+    upload_vertex();
   }
 
 
-  bool ui_mouse_position_update() noexcept
+  //void ui_out() noexcept override
+  //{
+  //  log_debug("texture got mouse out");
+  //}
+
+
+  bool ui_mouse_position_update() noexcept override
+  {
+    return true;
+  }
+
+
+  void ui_mouse_button_update() noexcept override
   {
     auto& m = ui_->mouse_metric_;
 
-    if (m.swipe)
-    {
-      geometry_delta(m.delta.x, m.delta.y);
-      upload_uniform();
-    }
-  
-    return true;
+    if (m.click && click_cb_)
+      click_cb_();
   }
 
 
-  void ui_mouse_button_update() noexcept
-  {
-    //printf("got ui_mouse_button_update\n");
-  }
-
-
-  bool ui_touch_update(int id) noexcept
+  bool ui_touch_update(int id) noexcept override
   {
     auto& m = ui_->touch_metric_[id];
 
-    if (m.st == ui_event::TouchEventDown)
-    {
-      in_touch_ = true;
-      return true;
-    }
-
-    if (m.st == ui_event::TouchEventUp)
-    {
-      in_touch_ = false;
-      return true;
-    }
-
-    if (m.st == ui_event::TouchEventMove)
-    {
-      if (!in_touch_) return true;
-
-      if (m.swipe)
-      {
-        geometry_delta(m.delta.x, m.delta.y);
-        upload_uniform();
-      }
-      return true;
-    }
+    if (m.click && click_cb_)
+      click_cb_();
 
     return true;
   }
 
 
-  std::string_view name() const noexcept
+  std::string_view name() const noexcept override
   {
     return "texture";
   }
@@ -169,7 +159,7 @@ private:
     float fw = coords_.p2.x - coords_.p1.x;
     float fh = coords_.p2.y - coords_.p1.y;
   
-     auto entry = vertex_buffer_.allocate_staging(4, GL_TRIANGLES);
+     auto entry = vertex_buffer_.allocate_staging(4, GL_TRIANGLE_STRIP);
 
      *entry++ = { 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f };
      *entry++ = { 0.0f,   fh, 0.0f, 1.0f, 0.0f, 0.0f };
@@ -216,6 +206,8 @@ private:
 
   std::unique_ptr<std::byte>    raw_data_;
   std::uint32_t raw_data_size_{0};
+
+  std::function<void ()> click_cb_;
 
 }; // widget_texture
 

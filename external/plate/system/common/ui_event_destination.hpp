@@ -223,7 +223,7 @@ public:
     return coords_.p2.y - coords_.p1.y;
   }
 
-  inline void set_geometry(const gpu::int_box& coords) noexcept
+  virtual void set_geometry(const gpu::int_box& coords) noexcept
   {
     coords_ = coords;
   }
@@ -244,13 +244,6 @@ public:
     return nullptr;
   }
 
-/*
-  void set_geometry(const gpu::int_box& coords, std::uint32_t prop)
-	{
-		coords_   = coords;
-    property_ = prop;
-	}
-*/
 
   inline gpu::int_box get_geometry() const noexcept
   {
@@ -367,6 +360,8 @@ public:
         set_hidden();
         ui_->to_disconnect_.push_back(shared_from_this());
         ui_->do_draw();
+
+        return;
       }
       else
       {
@@ -376,6 +371,14 @@ public:
     }
     else
       log_debug("disconnect from parent without a parent");
+  }
+
+
+  // called to a widget when it is no longer in the tree
+  // nb - not used yet
+
+  virtual void disconnected_from_parent() noexcept
+  {
   }
 
 

@@ -36,9 +36,10 @@ public:
   }
 
 
-  void set_geometry(const gpu::int_box& coords) noexcept
+  void set_geometry(const gpu::int_box& coords) noexcept override
 	{
     ui_event_destination::set_geometry(coords);
+
     upload_vertex();
     upload_uniform();
   }

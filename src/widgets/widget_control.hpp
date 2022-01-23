@@ -51,7 +51,7 @@ public:
   {
     update_slider_played();
 
-    if (!viewer_->has_frame() || mouse_down_ || widget_menu_list_ || widget_about_) // do not fade out with these states
+    if (!viewer_->has_frame() || mouse_down_ || (hold_control_ > 0)) // do not fade out with these states
       return;
 
     // after an amount of time of inactivity, fade this out
@@ -85,6 +85,28 @@ public:
   }
 
 
+  void hold_control() noexcept
+  {
+    ++hold_control_;
+    user_interacted();
+  }
+
+
+  void release_control() noexcept
+  {
+    hold_control_ = std::max(0, hold_control_ - 1);
+    user_interacted();
+  }
+
+
+  void attach_button(std::shared_ptr<plate::ui_event_destination> button) noexcept
+  {
+    button->set_geometry(get_button_coords(widget_buttons_.size()));
+
+    widget_buttons_.push_back(button);
+  }
+
+
   void set_geometry(const gpu::int_box& coords) noexcept
   {
     bool height_changed = false;
@@ -98,20 +120,24 @@ public:
     {
       widget_play_->disconnect_from_parent();
       widget_pause_->disconnect_from_parent();
-      widget_menu_->disconnect_from_parent();
-      widget_layers_->disconnect_from_parent();
 
       widget_play_.reset();
       widget_pause_.reset();
-      widget_menu_.reset();
-      widget_layers_.reset();
 
       create_buttons();
     }
 
     update_positions();
 
-    update_menu();
+    int i = 0;
+
+    for (auto& button : widget_buttons_)
+    {
+      if (auto w = button.lock())
+        w->set_geometry(get_button_coords(i));
+
+      ++i;
+    }
   }
 
 
@@ -255,20 +281,6 @@ private:
     widget_slider_->set_geometry(coords);
 
     update_slider_played();
-
-    // buttons
-
-    int sz = spacing * 6;
-
-    coords = { { coords_.p2.x - (2*x_off) - sz, coords_.p1.y },
-               { coords_.p2.x, coords_.p1.y + static_cast<int>(2*spacing) + sz } };
-
-    widget_menu_->set_geometry(coords);
-
-    coords = { { coords_.p2.x - ((2*x_off) + sz) * 3, coords_.p1.y },
-               { coords_.p2.x - ((2*x_off) + sz) * 2, coords_.p1.y + static_cast<int>(2*spacing) + sz } };
-
-    widget_layers_->set_geometry(coords);
   }
 
 
@@ -378,76 +390,6 @@ private:
       user_interacted();
     });
 
-    // menu
-
-    button_coords = { { coords_.p2.x - (2*x_off) - sz, coords_.p1.y },
-                      { coords_.p2.x, coords_.p1.y + static_cast<int>(2*top_spacing) + sz } };
-
-    float height   = (spacing * 3.0f) / 4.0f;
-    float height_2 = height / 2.0f;
-
-    std::array<shader_basic::basic_vertex, 18> v_menu =
-    {{
-      {x_off + spacing * 2.0f, (spacing * 2.0f), 0.0f, 1.0f},
-      {x_off + spacing * 2.0f, (spacing * 2.0f) + height, 0.0f, 1.0f},
-      {x_off + spacing * 3.0f, (spacing * 2.0f), 0.0f, 1.0f},
-
-      {x_off + spacing * 3.0f, (spacing * 2.0f), 0.0f, 1.0f},
-      {x_off + spacing * 2.0f, (spacing * 2.0f) + height, 0.0f, 1.0f},
-      {x_off + spacing * 3.0f, (spacing * 2.0f) + height, 0.0f, 1.0f},
-
-
-      {x_off + spacing * 2.0f, (spacing * 3.5f) - height_2, 0.0f, 1.0f},
-      {x_off + spacing * 2.0f, (spacing * 3.5f) + height_2, 0.0f, 1.0f},
-      {x_off + spacing * 3.0f, (spacing * 3.5f) - height_2, 0.0f, 1.0f},
-
-      {x_off + spacing * 3.0f, (spacing * 3.5f) - height_2, 0.0f, 1.0f},
-      {x_off + spacing * 2.0f, (spacing * 3.5f) + height_2, 0.0f, 1.0f},
-      {x_off + spacing * 3.0f, (spacing * 3.5f) + height_2, 0.0f, 1.0f},
-
-
-      {x_off + spacing * 2.0f, (spacing * 5.0f) - height, 0.0f, 1.0f},
-      {x_off + spacing * 2.0f, (spacing * 5.0f), 0.0f, 1.0f},
-      {x_off + spacing * 3.0f, (spacing * 5.0f) - height, 0.0f, 1.0f},
-
-      {x_off + spacing * 3.0f, (spacing * 5.0f) - height, 0.0f, 1.0f},
-      {x_off + spacing * 2.0f, (spacing * 5.0f), 0.0f, 1.0f},
-      {x_off + spacing * 3.0f, (spacing * 5.0f), 0.0f, 1.0f},
-    }};
-
-    widget_menu_ = ui_event_destination::make_ui<widget_basic_vertex>(ui_, button_coords,
-                                                    shared_from_this(), ui_->txt_color_, v_menu);
-  
-    widget_menu_->set_click_cb([this] ()
-    {
-      user_interacted();
-      create_menu();
-    });
-
-    // layers
-
-    button_coords = { { coords_.p2.x - ((2*x_off) + sz) * 3, coords_.p1.y },
-                      { coords_.p2.x - ((2*x_off) + sz) * 2, coords_.p1.y + static_cast<int>(2*top_spacing) + sz } };
-
-    std::array<shader_basic::basic_vertex, 3> v_layers =
-    {{
-      {x_off + spacing * 1.0f, spacing * 2.0f, 0.0f, 1.0f},
-      {x_off + spacing * 3.0f, spacing * 5.0f, 0.0f, 1.0f},
-      {x_off + spacing * 5.0f, spacing * 2.0f, 0.0f, 1.0f}
-    }};
-
-    widget_layers_ = ui_event_destination::make_ui<widget_basic_vertex>(ui_, button_coords,
-                                                    shared_from_this(), ui_->txt_color_, v_layers);
-
-    widget_layers_->set_click_cb([this] ()
-    {
-      user_interacted();
-
-      // send a p key_event to toggle view
-
-      viewer_->key_event(ui_event::KeyEvent::KeyEventDown, "p", "KeyP", ui_event::KeyModNone);
-    });
-
     update_buttons();
   }
 
@@ -471,259 +413,6 @@ private:
     {
       widget_play_->show();
       widget_pause_->hide();
-    }
-  }
-
-
-  void create_menu() noexcept
-  {
-    if (widget_menu_list_ || widget_about_) // wait for these to die before allowing a new menu
-      return;
-
-    // shade screen
-
-    std::array<gpu::color, 2> shade_color;
-    shade_color[0] = { 1.0f, 1.0f, 1.0f, 0.4f };
-    shade_color[1] = { 0.0f, 0.0f, 0.0f, 0.4f };
-
-    widget_menu_shade_ = ui_event_destination::make_ui<widget_box>(ui_, ui_->coords(),
-                              Prop::Display | Prop::Input | Prop::Swipe,
-                              shared_from_this(), shade_color);
-
-    widget_menu_shade_->set_click_cb([this] ()
-    {
-      delete_menu();
-    });
-
-    auto fade_in = ui_event_destination::make_anim<anim_alpha>(
-       ui_, widget_menu_shade_, ui_anim::Dir::Forward, 0.3);
-
-    // menu
-
-    int width  = std::min(coords_.width(), static_cast<int>(200 * ui_->pixel_ratio_));
-    int height = static_cast<int>(150 * ui_->pixel_ratio_);
-
-    int start_y = coords_.p2.y + 10 * ui_->pixel_ratio_;
-    int border = 10 * ui_->pixel_ratio_;
-    int border2 = 2 * border;
-
-    gpu::int_box coords = { { coords_.p2.x - width - border2, start_y + border },
-                            { coords_.p2.x - border, start_y + height + border2 } };
-
-    std::array<gpu::color, 2> bg_col;
-    bg_col[0] = { 0.92f, 0.92f, 0.92f, 0.94f };
-    bg_col[1] = { 0.08f, 0.08f, 0.08f, 0.94f };
-
-    widget_menu_list_ = ui_event_destination::make_ui<widget_text_list<std::string_view>>(ui_, shared_from_this(),
-        coords, ui_->txt_color_, bg_col, bg_col, 0.8, 10 * ui_->pixel_ratio_, gpu::align::BOTTOM | gpu::align::RIGHT);
-
-    std::vector<std::string_view> list;
-    
-    if (ui_event::have_file_system_access_support())
-      list.push_back("open local"sv);
-
-    list.push_back("about"sv);
-
-    widget_menu_list_->set_text(std::move(list));
-
-    widget_menu_list_->set_selection_cb([this] (std::uint32_t i, std::string_view s)
-    {
-      if (s == "open local")
-      {
-        viewer_->show_load();
-        delete_menu();
-
-        return;
-      }
-
-      if (s == "about")
-      {
-        create_about();
-
-        auto merged = make_anim_merge(ui_, widget_menu_list_, widget_about_);
-
-        merged.second->set_end_cb([this, wself(weak_from_this())] ()
-        {
-          if (auto w = wself.lock())
-          {
-            widget_menu_list_->disconnect_from_parent();
-            widget_menu_list_.reset();
-
-            user_interacted();
-          }
-        });
-
-        return;
-      }
-
-    });
-
-    auto merged = make_anim_merge(ui_, widget_menu_, widget_menu_list_);
-  }
-
-
-  void delete_menu() noexcept
-  {
-    user_interacted();
-
-    if (!widget_menu_shade_)
-      return;
-
-    if (!widget_about_) // keep the shade until about also goes
-    {
-      auto fade_out = ui_event_destination::make_anim<anim_alpha>(
-          ui_, widget_menu_shade_, ui_anim::Dir::Reverse, 0.2);
-
-      widget_menu_shade_->set_passive();
-
-      fade_out->set_end_cb([this, wself(weak_from_this())] ()
-      {
-        if (auto w = wself.lock())
-        {
-          widget_menu_shade_->disconnect_from_parent();
-          widget_menu_shade_.reset();
-        }
-      });
-    }
-
-    if (widget_menu_list_)
-    {
-      auto merged = make_anim_merge(ui_, widget_menu_list_, widget_menu_);
-      widget_menu_->show();
-
-      merged.second->set_end_cb([this, wself(weak_from_this())] ()
-      {
-        if (auto w = wself.lock())
-        {
-          widget_menu_list_->disconnect_from_parent();
-          widget_menu_list_.reset();
-
-          user_interacted();
-        }
-      });
-    }
-  }
-
-
-  void update_menu()
-  {
-    // shade
-
-    if (widget_menu_shade_)
-      widget_menu_shade_->set_geometry(ui_->coords());
-
-    // menu
-
-    if (widget_menu_list_)
-    {
-      int width  = std::min(coords_.width(), static_cast<int>(200 * ui_->pixel_ratio_));
-      int height = static_cast<int>(150 * ui_->pixel_ratio_);
-
-      int start_y = coords_.p2.y + 10 * ui_->pixel_ratio_;
-      int border = 10 * ui_->pixel_ratio_;
-      int border2 = 2 * border;
-
-      gpu::int_box coords = { { coords_.p2.x - width - border2, start_y + border },
-                              { coords_.p2.x - border, start_y + height + border2 } };
-
-      widget_menu_list_->set_geometry(coords);
-    }
-
-    // about
-
-    if (widget_about_)
-    {
-      int border = 10 * ui_->pixel_ratio_;
-      int border2 = border * 2;
-
-      auto c = ui_->coords();
-            
-      int h = std::min(static_cast<int>(400 * ui_->pixel_ratio_), (c.height() - border2) / 2);
-      int w = std::min(static_cast<int>(600 * ui_->pixel_ratio_), static_cast<int>((c.width() - border2) * 0.8));
-  
-      int x_centre = c.width()/2;
-      int y_centre = c.height()/2;
-  
-      c.p1 = { x_centre - w/2, y_centre - h/2 };
-      c.p2 = { x_centre + w/2, y_centre + h/2 };
-
-      widget_about_->set_geometry(c);
-    }
-  }
-
-
-  void create_about() noexcept
-  {
-    int border = 10 * ui_->pixel_ratio_;
-    int border2 = border * 2;
-
-    auto c = ui_->coords();
-
-    int h = std::min(static_cast<int>(400 * ui_->pixel_ratio_), (c.height() - border2) / 2);
-    int w = std::min(static_cast<int>(600 * ui_->pixel_ratio_), static_cast<int>((c.width() - border2) * 0.8));
-
-    int x_centre = c.width()/2;
-    int y_centre = c.height()/2;
-
-    c.p1 = { x_centre - w/2, y_centre - h/2 };
-    c.p2 = { x_centre + w/2, y_centre + h/2 };
-
-    std::array<gpu::color, 2> bg_col;
-    bg_col[0] = { 0.92f, 0.92f, 0.92f, 0.94f };
-    bg_col[1] = { 0.08f, 0.08f, 0.08f, 0.94f };
-
-    std::string txt = "About.\n\nThe AniMol web app is an open-source project, developed at the Disordered Quantum Systems (DisQS) Research group at the University of Warwick.\n\nThe code is released in its entirety under the 'New BSD License' and can be found at github.com/DisQS/animol-viewer.\n\nPlease feel free to contact us on twitter @AniMolWebApp, or submit an issue to the animol-viewer GitHub.";
-
-    widget_about_ = ui_event_destination::make_ui<widget_text_box>(ui_, c, shared_from_this(),
-          txt, ui_->txt_color_, bg_col, 0.6, 10 * ui_->pixel_ratio_);
-
-    widget_menu_shade_->set_click_cb([this] () // shade now controls about
-    {
-      delete_about();
-    });
-  }
-
-
-  void delete_about() noexcept
-  {
-    user_interacted();
-  
-    if (!widget_menu_shade_)
-      return;
-
-    // shade
-     
-    auto fade_out = ui_event_destination::make_anim<anim_alpha>(
-        ui_, widget_menu_shade_, ui_anim::Dir::Reverse, 0.2);
-  
-    widget_menu_shade_->set_passive();
-
-    fade_out->set_end_cb([this, wself(weak_from_this())] ()
-    {
-      if (auto w = wself.lock())
-      {
-        widget_menu_shade_->disconnect_from_parent();
-        widget_menu_shade_.reset();
-      }
-    });
-
-    // about
-
-    if (widget_about_)
-    {
-      auto merged = make_anim_merge(ui_, widget_about_, widget_menu_);
-      widget_menu_->show();
-
-      merged.second->set_end_cb([this, wself(weak_from_this())] ()
-      {
-        if (auto w = wself.lock())
-        {
-          widget_about_->disconnect_from_parent();
-          widget_about_.reset();
-
-          user_interacted();
-        }
-      });
     }
   }
 
@@ -766,20 +455,28 @@ private:
   }
 
 
+  gpu::int_box get_button_coords(int index) const noexcept
+  {
+    // buttons are square and the button icon is 60% the size of the button
+
+    float spacing      = coords_.height() / 11.0; // top 1/11th is for bar
+    int   button_size  = spacing * 9;
+    int   offset       = index * 2 * button_size; // offset from the right
+
+    gpu::int_box coords = {{ coords_.p2.x - offset - button_size, coords_.p1.y                },
+                           { coords_.p2.x - offset,               coords_.p1.y + button_size, }};
+
+    return coords;
+  }
+
+
   std::shared_ptr<widget_basic_vertex> widget_play_;
   std::shared_ptr<widget_basic_vertex> widget_pause_;
-  std::shared_ptr<widget_basic_vertex> widget_menu_;
-  std::shared_ptr<widget_basic_vertex> widget_layers_;
 
   std::shared_ptr<widget_box>    widget_slider_;
   std::shared_ptr<widget_box>    widget_slider_played_;
 
   std::shared_ptr<widget_text>   widget_frame_num_;
-
-  std::shared_ptr<widget_text_list<std::string_view>> widget_menu_list_;
-  std::shared_ptr<widget_box>                         widget_menu_shade_;
-
-  std::shared_ptr<widget_text_box> widget_about_;
 
   VIEWER* viewer_{nullptr};
 
@@ -789,8 +486,12 @@ private:
   double last_user_interaction_{0};
   bool fading_out_{false};
 
+  int hold_control_{0};
 
-}; // class widget_main
+  std::vector<std::weak_ptr<plate::ui_event_destination>> widget_buttons_;
+
+
+}; // class widget_control
 
 
 } // namespace pdbmovie

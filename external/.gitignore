@@ -1,4 +1,5 @@
 fmt
 pfr
 fast_float
+magic_enum
 include
