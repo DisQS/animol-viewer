@@ -24,8 +24,10 @@ POST_JS = ../external/plate/system/webgl/post.js
 
 CC=emcc
 CFLAGS=-std=c++2b -O3 -flto -DNDEBUG -I ../src/ -I ../external/include/ -I../external/plate/ -DPLATE -DPLATE_WEBGL -I${MOLCLIBPATH}/ -I${MOLSCRIPTPATH}/
+#CFLAGS=-std=c++2b -O1 -g -flto -DNDEBUG -I ../src/ -I ../external/include/ -I../external/plate/ -DPLATE -DPLATE_WEBGL -I${MOLCLIBPATH}/ -I${MOLSCRIPTPATH}/
 
 EFLAGS=-O3 -DNDEBUG -flto -DVERTEX_SUPPORT -DCUSTOM_ATOF=fast_float_c
+#EFLAGS=-g -O1 -DNDEBUG -flto -DVERTEX_SUPPORT -DCUSTOM_ATOF=fast_float_c
 
 # single threaded, webgl1 (investigate: -s EVAL_CTORS)
 

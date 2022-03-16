@@ -19,22 +19,20 @@ cp pdbmovie.wasm temp-web/version/${i}/
 cp decoder_worker.js temp-web/version/${i}/
 cp decoder_worker.wasm temp-web/version/${i}/
 
-pushd temp-web
-brotli -f index.html -o index.html.br
-gzip -f -k index.html
+pushd temp-web > /dev/null
+
+brotli -f index.html -o index.html.br &
 
 cd version/${i}
-brotli -f pdbmovie.js -o pdbmovie.js.br
-gzip -f -k pdbmovie.js
-brotli -f pdbmovie.wasm -o pdbmovie.wasm.br
-gzip -f -k pdbmovie.wasm
+brotli -f pdbmovie.js -o pdbmovie.js.br &
+brotli -f pdbmovie.wasm -o pdbmovie.wasm.br &
 
-brotli -f decoder_worker.js -o decoder_worker.js.br
-gzip -f -k decoder_worker.js
-brotli -f decoder_worker.wasm -o decoder_worker.wasm.br
-gzip -f -k decoder_worker.wasm
+brotli -f decoder_worker.js -o decoder_worker.js.br &
+brotli -f decoder_worker.wasm -o decoder_worker.wasm.br &
 
-popd
+wait
+
+popd > /dev/null
 
 chmod a+xr -R temp-web
 
