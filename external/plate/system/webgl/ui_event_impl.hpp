@@ -538,7 +538,8 @@ void stop()
 void init();
 
 
-void to_fullscreen(plate::state* s)
+template<class S>
+void to_fullscreen(std::shared_ptr<S> s)
 {
   EmscriptenFullscreenChangeEvent e;
   emscripten_get_fullscreen_status(&e);
@@ -554,7 +555,9 @@ void to_fullscreen(plate::state* s)
   strategy.scaleMode = EMSCRIPTEN_FULLSCREEN_SCALE_STRETCH;
   strategy.filteringMode = EMSCRIPTEN_FULLSCREEN_FILTERING_DEFAULT;
 
-  emscripten_request_fullscreen_strategy(s->name_.c_str(), false, &strategy);
+  //emscripten_request_fullscreen_strategy(s->name_.c_str(), false, &strategy);
+  std::string elem = s->name_ + "div";
+  emscripten_request_fullscreen_strategy(elem.c_str(), false, &strategy);
 };
 
 
@@ -835,16 +838,6 @@ EM_BOOL f_fullscreen(int event_type, const EmscriptenFullscreenChangeEvent *e, v
     
   emscripten_webgl_make_context_current(s->ctx_);
 
-  auto ratio = emscripten_get_device_pixel_ratio();
-
-  if (e->isFullscreen == EM_TRUE)
-    arch_resize(s, e->elementWidth * ratio, e->elementHeight * ratio);
-  else // delay the resize by 1 frame as the underlying os hasn't quite finished
-    s->add_to_command_queue([s] ()
-    {
-      arch_resize(s);
-    });
-
   return EM_TRUE;
 }
 
@@ -1001,14 +994,6 @@ void f_fragment_change(std::string name)
 void f_canvas_resize_exact(std::string name, int width, int height)
 {
   using namespace plate;
-
-  // ignore if we're in fullscreen mode.. why does this get called anyway?
-
-  EmscriptenFullscreenChangeEvent e;
-  emscripten_get_fullscreen_status(&e);
-
-  if (e.isFullscreen == EM_TRUE)
-    return;
 
   auto name_s = "#" + name.substr(0, name.length()-3);
 
