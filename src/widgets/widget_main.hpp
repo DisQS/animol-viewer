@@ -34,7 +34,7 @@ constexpr underlying_type_t<Enum> to_underlying( Enum e ) noexcept
 } //namespace std
 
 
-namespace pdbmovie {
+namespace animol {
 
 using namespace plate;
 
@@ -1013,11 +1013,11 @@ private:
 }; // class widget_main
 
 
-} // namespace pdbmovie
+} // namespace animol
 
 
 template <>
-struct fmt::formatter<pdbmovie::widget_main>
+struct fmt::formatter<animol::widget_main>
 {
   // 'a' means serialize entire state; 's' means only style
   char presentation = 'a';
@@ -1031,13 +1031,13 @@ struct fmt::formatter<pdbmovie::widget_main>
       presentation = *it++;
 
     if (it != end && *it != '}')
-      throw format_error("invalid format when formatting pdbmovie::widget_main");
+      throw format_error("invalid format when formatting animol::widget_main");
 
     return it;
   }
 
   template<typename FormatContext>
-  auto format(const pdbmovie::widget_main& w, FormatContext& ctx) const
+  auto format(const animol::widget_main& w, FormatContext& ctx) const
   {
     log_debug(FMT_COMPILE("w.layers_.size(): {}"), w.layers_.size());
     log_debug(FMT_COMPILE("w.layers_[0]->is_hidden(): {}"), w.layers_[0]->is_hidden());

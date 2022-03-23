@@ -25,7 +25,7 @@ float fast_float_c(const char* s)
 {
   float f;
 
-  if (pdbmovie::string_data::parse_float(f, std::string_view{s, strlen(s)}))
+  if (animol::string_data::parse_float(f, std::string_view{s, strlen(s)}))
     return f;
 
   //printf("bad fast_float: >%s<\n", s);
@@ -269,7 +269,7 @@ void decode_contents_no_color(char* data, int size)
 
 void visualise_atoms(char* data, int size)
 {
-  using namespace pdbmovie;
+  using namespace animol;
 
   visualise v({data, static_cast<std::size_t>(size) });
 

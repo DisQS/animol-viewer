@@ -13,7 +13,7 @@
     utility class to help parse string data.
 */
 
-namespace pdbmovie {
+namespace animol {
 
 class string_data
 {
@@ -118,4 +118,4 @@ private:
   char* end_;
 };
 
-} // namespace pdbmovie
+} // namespace animol

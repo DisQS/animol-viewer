@@ -14,7 +14,7 @@
 */
 
 
-namespace pdbmovie {
+namespace animol {
 
 
 class visualise
@@ -240,4 +240,4 @@ private:
 
 }; // class visualise
 
-} // namespace pdbmovie
+} // namespace animol

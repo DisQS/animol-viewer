@@ -18,7 +18,7 @@
 #include "widget_control.hpp"
 
 
-namespace pdbmovie {
+namespace animol {
 
 using namespace plate;
 using namespace std::literals;
@@ -380,4 +380,4 @@ private:
 }; // class widget_menu_option
 
 
-} // namespace pdbmovie
+} // namespace animol

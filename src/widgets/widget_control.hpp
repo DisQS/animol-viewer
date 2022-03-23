@@ -18,7 +18,7 @@
 #include "widgets/anim_merge.hpp"
 
 
-namespace pdbmovie {
+namespace animol {
 
 using namespace plate;
 using namespace std::literals;
@@ -494,4 +494,4 @@ private:
 }; // class widget_control
 
 
-} // namespace pdbmovie
+} // namespace animol

@@ -18,7 +18,7 @@
 #include "widget_control.hpp"
 
 
-namespace pdbmovie {
+namespace animol {
 
 //EM_JS(void, download_data, (const char* t, const int t_len),
 //{
@@ -337,4 +337,4 @@ protected:
 };
 
 
-} // namespace pdbmovie
+} // namespace animol

@@ -11,7 +11,7 @@
 #include "widget_layer.hpp"
 
 
-namespace pdbmovie {
+namespace animol {
 
 template<class M>
 class widget_layer_spacefill : public widget_layer<M>
@@ -206,4 +206,4 @@ private:
 }; // class widget_layer_spacefill
 
 
-} // namespace pdbmovie
+} // namespace animol

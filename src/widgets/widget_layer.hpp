@@ -6,7 +6,7 @@
 #include "plate.hpp"
 
 
-namespace pdbmovie {
+namespace animol {
 
 
 template<class M>
@@ -31,4 +31,4 @@ public:
 }; // class widget_layer
 
 
-} // namespace pdbmovie
+} // namespace animol

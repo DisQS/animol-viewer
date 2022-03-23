@@ -233,7 +233,7 @@ private:
 
     // start main widget
 
-    w_ = plate::ui_event_destination::make_ui<pdbmovie::widget_main>(s_, b, url_, code_, description_);
+    w_ = plate::ui_event_destination::make_ui<animol::widget_main>(s_, b, url_, code_, description_);
 
     if (!local_files_.empty() && url_.empty() && code_.empty())
     {
@@ -264,7 +264,7 @@ private:
   std::string code_;
   std::string description_;
 
-  std::shared_ptr<pdbmovie::widget_main> w_{};
+  std::shared_ptr<animol::widget_main> w_{};
 
 }; // class movie
 
