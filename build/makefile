@@ -23,15 +23,20 @@ POST_JS = ../external/plate/system/webgl/post.js
 # -g -DNDEBUG
 
 CC=emcc
-CFLAGS=-std=c++2b -O3 -flto -DNDEBUG -I ../src/ -I ../external/include/ -I../external/plate/ -DPLATE -DPLATE_WEBGL -I${MOLCLIBPATH}/ -I${MOLSCRIPTPATH}/
+#CFLAGS=-std=c++2b -O3 -flto -DNDEBUG -I ../src/ -I ../external/include/ -I../external/plate/ -DPLATE -DPLATE_WEBGL -I${MOLCLIBPATH}/ -I${MOLSCRIPTPATH}/
+#CFLAGS=-std=c++2b -O3 -DNDEBUG -I ../src/ -I ../external/include/ -I../external/plate/ -DPLATE -DPLATE_WEBGL -I${MOLCLIBPATH}/ -I${MOLSCRIPTPATH}/
+CFLAGS=-std=c++2b -O3 -g -DNDEBUG -I ../src/ -I ../external/include/ -I../external/plate/ -DPLATE -DPLATE_WEBGL -I${MOLCLIBPATH}/ -I${MOLSCRIPTPATH}/
 #CFLAGS=-std=c++2b -O1 -g -flto -DNDEBUG -I ../src/ -I ../external/include/ -I../external/plate/ -DPLATE -DPLATE_WEBGL -I${MOLCLIBPATH}/ -I${MOLSCRIPTPATH}/
 
-EFLAGS=-O3 -DNDEBUG -flto -DVERTEX_SUPPORT -DCUSTOM_ATOF=fast_float_c
+#EFLAGS=-O3 -DNDEBUG -flto -DVERTEX_SUPPORT -DCUSTOM_ATOF=fast_float_c
+#EFLAGS=-O3 -DNDEBUG -DVERTEX_SUPPORT -DCUSTOM_ATOF=fast_float_c
+EFLAGS=-O3 -g -DNDEBUG -DVERTEX_SUPPORT -DCUSTOM_ATOF=fast_float_c
 #EFLAGS=-g -O1 -DNDEBUG -flto -DVERTEX_SUPPORT -DCUSTOM_ATOF=fast_float_c
 
 # single threaded, webgl1 (investigate: -s EVAL_CTORS)
 
 OPTIONS=--bind -s MODULARIZE=1 -s EXPORT_NAME="'plate'" -s WASM=1 -s USE_WEBGL2=0 -s FILESYSTEM=1 -s FETCH=1 -s ENVIRONMENT='web,worker' -s DISABLE_EXCEPTION_CATCHING=1 -s ALLOW_MEMORY_GROWTH=1 --closure 1
+#OPTIONS=--bind -s MODULARIZE=1 -s EXPORT_NAME="'plate'" -s WASM=1 -s USE_WEBGL2=0 -s FILESYSTEM=1 -s FETCH=1 -s ENVIRONMENT='web,worker' -s DISABLE_EXCEPTION_CATCHING=1 -s ALLOW_MEMORY_GROWTH=1
 
 
 # compile molauto

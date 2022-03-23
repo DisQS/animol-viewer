@@ -40,7 +40,7 @@ public:
   texture() { };
 
 
-  texture(std::byte * data, int total_bytes, int width, int height, int depth) :
+  texture(const std::byte * data, int total_bytes, int width, int height, int depth) :
     data_(data), total_bytes_(total_bytes), width_(width), height_(height), depth_(depth)
   {
   };
@@ -137,7 +137,7 @@ public:
 
   GLuint  id_{0};
 
-  std::byte* data_{nullptr};
+  const std::byte* data_{nullptr};
   int total_bytes_{0};
 
   int width_{0};

@@ -120,6 +120,8 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
 {
   auto s = std::make_shared<plate::state>();
 
+  //s->name_ = canvas_name;
+
   double w, h;
 
   //[[maybe_unused]] EMSCRIPTEN_RESULT r = emscripten_get_element_css_size(canvas_name.c_str(), &w, &h);
@@ -283,11 +285,11 @@ void arch_resize(plate::state* s, int w, int h)
   s->viewport_width_ = w / s->pixel_ratio_;
   s->viewport_height_ = h / s->pixel_ratio_;
   
-  //log_debug(FMT_COMPILE("canvas: {} viewport: {} {} pixels: {} {} ratio: {}"), s->name_, w, h, s->pixel_width_, s->pixel_height_, s->pixel_ratio_);
+  log_debug(FMT_COMPILE("canvas1: {} viewport: {} {} pixels: {} {} ratio: {}"), s->name_, w, h, s->pixel_width_, s->pixel_height_, s->pixel_ratio_);
   
   emscripten_set_canvas_element_size(s->name_.c_str(), s->pixel_width_, s->pixel_height_);
-  js_set_dims((s->pixel_width_ / s->pixel_ratio_), (s->pixel_height_ / s->pixel_ratio_),
-                                                           s->name_.data()+1, s->name_.length()-1);
+  //js_set_dims((s->pixel_width_ / s->pixel_ratio_), (s->pixel_height_ / s->pixel_ratio_),
+  //                                                         s->name_.data()+1, s->name_.length()-1);
 
   s->projection_.set(s->pixel_width_, s->pixel_height_);
   glViewport(0, 0, s->pixel_width_, s->pixel_height_);
@@ -316,12 +318,12 @@ void arch_resize(plate::state* s)
   s->pixel_width_  = std::floor(s->viewport_width_  * s->pixel_ratio_);
   s->pixel_height_ = std::floor(s->viewport_height_ * s->pixel_ratio_);
   
-  //log_debug(FMT_COMPILE("canvas: {} viewport: {} {} pixels: {} {} ratio: {}"), s->name_, w, h, s->pixel_width_, s->pixel_height_, s->pixel_ratio_);
+  log_debug(FMT_COMPILE("canvas2: {} viewport: {} {} pixels: {} {} ratio: {}"), s->name_, w, h, s->pixel_width_, s->pixel_height_, s->pixel_ratio_);
   
   emscripten_set_canvas_element_size(s->name_.c_str(), s->pixel_width_, s->pixel_height_);
 
-  js_set_dims((s->pixel_width_ / s->pixel_ratio_), (s->pixel_height_ / s->pixel_ratio_),
-                                                    s->name_.data()+1, s->name_.length()-1);
+  //js_set_dims((s->pixel_width_ / s->pixel_ratio_), (s->pixel_height_ / s->pixel_ratio_),
+  //                                                  s->name_.data()+1, s->name_.length()-1);
 
   s->projection_.set(s->pixel_width_, s->pixel_height_);
   glViewport(0, 0, s->pixel_width_, s->pixel_height_);

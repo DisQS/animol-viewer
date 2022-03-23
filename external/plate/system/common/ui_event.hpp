@@ -197,7 +197,8 @@ extern float get_font_size() noexcept;
 
 extern double now();
 
-extern void to_fullscreen();
+template<class S>
+extern void to_fullscreen(std::shared_ptr<S>);
 
 template<class S>
 extern void add_dest(S*, std::string);

@@ -24,7 +24,7 @@ using namespace plate;
 using namespace std::literals;
 
 template<class VIEWER>
-class widget_menu_layer : public plate::ui_event_destination
+class widget_menu_projection_button : public plate::ui_event_destination
 {
 
 public:
@@ -87,36 +87,19 @@ protected:
 
       for (int row = 0; row < sz; ++row)
       {
-        for (int col = 0; col < sz; ++col)
+        const int fm = [&] {
+          int fm = std::abs(row - sz/2);
+          fm += sz/40;
+          fm = fm * fm / (sz*6/40);
+          return fm;
+        }();
+
+        for (int col = fm; col < sz - fm; ++col)
         {
-          auto circle = [=] (const int x, const int y, const int r)
-          {
-            return (col-x)*(col-x) + (row-y)*(row-y) < r*r;
-          };
-
-          auto line = [=] (const int x1, const int y1, const int x2, const int y2, const int r)
-          {
-            const float l2 = (x1-x2)*(x1-x2) + (y1-y2)*(y1-y2);  // i.e. |w-v|^2 -  avoid a sqrt
-            if (l2 == 0.0f) return (col-x1)*(col-x1) + (row-y1)*(row-y1) < r*r; // line of length 0
-            const float t = std::clamp(((col-x1)*(x2-x1) + (row-y1)*(y2-y1)) / l2, 0.0f, 1.0f);
-            const float xproj = x1 + t * (x2-x1);
-            const float yproj = y1 + t * (y2-y1);
-            return (col-xproj)*(col-xproj) + (row-yproj)*(row-yproj) < r*r;
-          };
-
-          if (   circle(sz*1/8, sz*7/8, sz/5)
-              || circle(sz*1/2, sz*1/8, sz/5)
-              || circle(sz*7/8, sz*5/8, sz/5)
-              || line(sz*1/8, sz*7/8, sz*1/2, sz*1/8, sz/15)
-              || line(sz*7/8, sz*5/8, sz*1/2, sz*1/8, sz/15)
-             )
-          {
-            int offset = (row * w) + (col * 4);
-            bitmap[offset+3] = 255;
-          }
+          int offset = (row * w) + (col * 4);
+          bitmap[offset+3] = 255;
         }
       }
-
       return bitmap;
     }();
 
@@ -180,23 +163,23 @@ protected:
 
     std::vector<std::string_view> list;
     
-    list.push_back("Spacefill"sv);
-    list.push_back("Cartoon"sv);
+    list.push_back("Orthogonal"sv);
+    list.push_back("Perspective"sv);
 
     widget_menu_list_->set_text(std::move(list));
 
     widget_menu_list_->set_selection_cb([this] (std::uint32_t i, std::string_view s)
     {
-      if (s == "Spacefill")
+      if (s == "Orthogonal")
       {
-        viewer_->switch_to_layer("layer_spacefill");
+        viewer_->ui_->projection_.set_view(projection::view::orthogonal, &viewer_->ui_->anim_);
         widget_menu_list_->clear_selection();
         return;
       }
 
-      if (s == "Cartoon")
+      if (s == "Perspective")
       {
-        viewer_->switch_to_layer("layer_cartoon");
+        viewer_->ui_->projection_.set_view(projection::view::perspective, &viewer_->ui_->anim_);
         widget_menu_list_->clear_selection();
         return;
       }

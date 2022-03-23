@@ -461,7 +461,7 @@ private:
 
     float spacing      = coords_.height() / 11.0; // top 1/11th is for bar
     int   button_size  = spacing * 9;
-    int   offset       = index * 2 * button_size; // offset from the right
+    int   offset       = index * 1 * button_size; // offset from the right
 
     gpu::int_box coords = {{ coords_.p2.x - offset - button_size, coords_.p1.y                },
                            { coords_.p2.x - offset,               coords_.p1.y + button_size, }};

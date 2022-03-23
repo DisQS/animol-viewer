@@ -28,7 +28,7 @@ float fast_float_c(const char* s)
   if (pdbmovie::string_data::parse_float(f, std::string_view{s, strlen(s)}))
     return f;
 
-  printf("bad fast_float: >%s<\n", s);
+  //printf("bad fast_float: >%s<\n", s);
   return 0;
 }
 

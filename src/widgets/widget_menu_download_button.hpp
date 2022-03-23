@@ -20,11 +20,30 @@
 
 namespace pdbmovie {
 
+//EM_JS(void, download_data, (const char* t, const int t_len),
+//{
+//  var c = UTF8ToString(t, t_len);
+//
+//  downloadFolder(c);
+//});
+
+//  /**
+//   * @flieoverview testttttt
+//   * @externs
+//   */
+//  console.log("test");
+//  console.log(UTF8ToString(t, t_len));
+//  var downloadFolder = function(x) {};
+//  downloadFolder(UTF8ToString(t, t_len));
+//  //document.querySelector(t);
+//});
+  
+
 using namespace plate;
 using namespace std::literals;
 
 template<class VIEWER>
-class widget_menu_layer : public plate::ui_event_destination
+class widget_menu_download_button : public plate::ui_event_destination
 {
 
 public:
@@ -60,7 +79,7 @@ public:
 protected:
 
   
-  virtual void create_button() noexcept
+  void create_button() noexcept
   {
     static constexpr int sz = 120;
     static constexpr int w  = sz * 4;;
@@ -85,37 +104,26 @@ protected:
         }
       }
 
-      for (int row = 0; row < sz; ++row)
-      {
+      for (int row = 0; row < sz*3/8; ++row)
+        for (int col = sz*3/8; col < sz*5/8; ++col)
+        {
+          int offset = (row * w) + (col * 4);
+          bitmap[offset+3] = 255;
+        }
+
+      for (int row = sz*3/8; row < sz*3/4; ++row)
+        for (int col = row - sz/4; col < sz*5/4 - row; ++col)
+        {
+          int offset = (row * w) + (col * 4);
+          bitmap[offset+3] = 255;
+        }
+
+      for (int row = sz*3/4; row < sz; ++row)
         for (int col = 0; col < sz; ++col)
         {
-          auto circle = [=] (const int x, const int y, const int r)
-          {
-            return (col-x)*(col-x) + (row-y)*(row-y) < r*r;
-          };
-
-          auto line = [=] (const int x1, const int y1, const int x2, const int y2, const int r)
-          {
-            const float l2 = (x1-x2)*(x1-x2) + (y1-y2)*(y1-y2);  // i.e. |w-v|^2 -  avoid a sqrt
-            if (l2 == 0.0f) return (col-x1)*(col-x1) + (row-y1)*(row-y1) < r*r; // line of length 0
-            const float t = std::clamp(((col-x1)*(x2-x1) + (row-y1)*(y2-y1)) / l2, 0.0f, 1.0f);
-            const float xproj = x1 + t * (x2-x1);
-            const float yproj = y1 + t * (y2-y1);
-            return (col-xproj)*(col-xproj) + (row-yproj)*(row-yproj) < r*r;
-          };
-
-          if (   circle(sz*1/8, sz*7/8, sz/5)
-              || circle(sz*1/2, sz*1/8, sz/5)
-              || circle(sz*7/8, sz*5/8, sz/5)
-              || line(sz*1/8, sz*7/8, sz*1/2, sz*1/8, sz/15)
-              || line(sz*7/8, sz*5/8, sz*1/2, sz*1/8, sz/15)
-             )
-          {
-            int offset = (row * w) + (col * 4);
-            bitmap[offset+3] = 255;
-          }
+          int offset = (row * w) + (col * 4);
+          bitmap[offset+3] = 255;
         }
-      }
 
       return bitmap;
     }();
@@ -125,7 +133,7 @@ protected:
 
     widget_menu_ = ui_event_destination::make_ui<widget_texture>(ui_, coords_, Prop::Display, shared_from_this(),
                                                                         std::move(t), widget_texture::options::STRETCH);
-  
+
     widget_menu_->set_click_cb([this] ()
     {
       create_menu_list();
@@ -134,7 +142,7 @@ protected:
   }
 
 
-  virtual void create_menu_list() noexcept
+  void create_menu_list() noexcept
   {
     if (widget_menu_list_)
       return;
@@ -179,25 +187,43 @@ protected:
         coords, ui_->txt_color_, bg_col, bg_col, 0.8, 10 * ui_->pixel_ratio_, gpu::align::BOTTOM | gpu::align::RIGHT);
 
     std::vector<std::string_view> list;
-    
-    list.push_back("Spacefill"sv);
-    list.push_back("Cartoon"sv);
+
+    list.push_back("Download data"sv);
+    list.push_back("Download QR code"sv);
 
     widget_menu_list_->set_text(std::move(list));
 
     widget_menu_list_->set_selection_cb([this] (std::uint32_t i, std::string_view s)
     {
-      if (s == "Spacefill")
+      if (s == "Download data")
       {
-        viewer_->switch_to_layer("layer_spacefill");
+        /*EM_ASM(
+          console.log('a');
+          downloadFolder('#fullscreen');
+          console.log('b');
+        );*/
+        //std::string command = std::string{"downloadFolder('"} + std::string{viewer_->ui_->name_.data()} + std::string{"')"};
+        //emscripten_run_script(command.data());
+        emscripten_run_script(std::string{"downloadFolder('" + viewer_->ui_->name_ + "')"}.data());
+
+        //download_data(viewer_->ui_->name_.data(), viewer_->ui_->name_.size());
+
         widget_menu_list_->clear_selection();
+        delete_menu_list();
         return;
       }
 
-      if (s == "Cartoon")
+      if (s == "Download QR code")
       {
-        viewer_->switch_to_layer("layer_cartoon");
+        std::string command = std::string{"downloadQRCode('"} + std::string{viewer_->ui_->name_.data()} + std::string{"')"};
+        emscripten_run_script(command.data());
+
+        /*EM_ASM({
+          console.log(UTF8ToString($0));
+          }, "hhhhhhhhh");*/
+
         widget_menu_list_->clear_selection();
+        delete_menu_list();
         return;
       }
 
@@ -277,7 +303,7 @@ protected:
 
   VIEWER* viewer_{nullptr};
 
-}; // class widget_menu_layer
+};
 
 
 } // namespace pdbmovie

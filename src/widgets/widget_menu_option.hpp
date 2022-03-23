@@ -62,35 +62,49 @@ private:
   
   void create_button() noexcept
   {
-    static constexpr int sz = 40;
+    static constexpr int sz = 120;
     static constexpr int w  = sz * 4;;
-
-    std::array<std::uint8_t, sz * sz * 4> bitmap{};
 
     const std::uint8_t r = ui_->txt_color_[0].r * 255;
     const std::uint8_t g = ui_->txt_color_[0].g * 255;
     const std::uint8_t b = ui_->txt_color_[0].b * 255;
 
-    auto fill_f = [&] (int s1, int s2)
+    const auto bitmap = [&]
     {
-      for (int row = s1; row < s2; ++row)
+      std::array<std::uint8_t, sz * sz * 4> bitmap{};
+
+      for (int row = 0; row < sz; ++row)
       {
-        for (int col = sz * 0.4; col < sz * 0.6; ++col)
+        for (int col = 0; col < sz; ++col)
         {
           int offset = (row * w) + (col * 4);
           bitmap[offset  ] = r;
           bitmap[offset+1] = g;
           bitmap[offset+2] = b;
-          bitmap[offset+3] = 255;
+          bitmap[offset+3] = 0;
         }
       }
-    };
 
-    fill_f(8, 14);
-    fill_f(18, 24);
-    fill_f(28, 34);
+      auto fill_f = [&] (const int s1, const int s2)
+      {
+        for (int row = s1; row < s2; ++row)
+        {
+          for (int col = 0; col < sz; ++col)
+          {
+            int offset = (row * w) + (col * 4);
+            bitmap[offset+3] = 255;
+          }
+        }
+      };
 
-    texture t(reinterpret_cast<std::byte*>(&bitmap[0]), sz * sz * 4, sz, sz, 4);
+      fill_f(sz*0/5, sz*1/5);
+      fill_f(sz*2/5, sz*3/5);
+      fill_f(sz*4/5, sz*5/5);
+
+      return bitmap;
+    }();
+
+    texture t(reinterpret_cast<const std::byte*>(&bitmap[0]), sz * sz * 4, sz, sz, 4);
     t.upload();
 
     widget_menu_ = ui_event_destination::make_ui<widget_texture>(ui_, coords_, Prop::Display, shared_from_this(),
@@ -152,7 +166,7 @@ private:
     if (ui_event::have_file_system_access_support())
       list.push_back("open local"sv);
 
-    list.push_back("about"sv);
+    list.push_back("About"sv);
 
     widget_menu_list_->set_text(std::move(list));
 
@@ -166,7 +180,7 @@ private:
         return;
       }
 
-      if (s == "about")
+      if (s == "About")
       {
         create_about();
 

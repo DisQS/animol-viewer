@@ -18,6 +18,9 @@
 
 #include "widget_control.hpp"
 #include "widget_menu_option.hpp"
+#include "widget_menu_download_button.hpp"
+#include "widget_menu_fullscreen_button.hpp"
+#include "widget_menu_projection_button.hpp"
 #include "widget_menu_layer.hpp"
 
 // c++23 std::to_underlying funtion
@@ -169,9 +172,9 @@ public:
     if (ui_)
       emscripten_webgl_make_context_current(ui_->ctx_);
 
-    clear();
+    log_debug(FMT_COMPILE("widget for {} about to be deleted"), item_);
 
-    log_debug(FMT_COMPILE("widget for {} deleted"), item_);
+    clear();
   }
 
 
@@ -276,6 +279,11 @@ public:
     return is_remote_;
   }
 
+  constexpr void set_remote(const bool i) noexcept
+  {
+    is_remote_ = i;
+  }
+
 
   inline const std::string& get_item() const noexcept
   {
@@ -343,13 +351,13 @@ public:
         return;
       }
 
-      if (code_utf8 == "ArrowUp") // go forwards one frame
+      if (code_utf8 == "ArrowUp" || code_utf8 == "Period") // go forwards one frame
       {
         set_frame(current_entry_ + 1);
         return;
       }
 
-      if (code_utf8 == "ArrowDown") // go back one frame
+      if (code_utf8 == "ArrowDown" || code_utf8 == "Comma") // go back one frame
       {
         set_frame(current_entry_ - 1);
         return;
@@ -401,6 +409,12 @@ public:
       }
 
       if (code_utf8 == "KeyS") // test save
+      {
+        std::string s = fmt::format(FMT_COMPILE("{:s}"), *this);
+        log_debug(FMT_COMPILE("json: {}"), s);
+        return;
+      }
+      if (code_utf8 == "KeyD") // test save
       {
         std::string s = fmt::format(FMT_COMPILE("{}"), *this);
         log_debug(FMT_COMPILE("json: {}"), s);
@@ -564,12 +578,16 @@ public:
       auto new_w = ui_event_destination::make_ui<widget_control<widget_main>>(ui_, cc, shared_from_this(), this);
 
       // create menu
+      
+      new_w->attach_button(ui_event_destination::make_ui<widget_menu_fullscreen_button<widget_main>>(ui_, cc, new_w, this));
 
       if (visible_menu_option_ == visible::show)
-        new_w->attach_button(ui_event_destination::make_ui<widget_menu_option<widget_main>>(ui_, cc, new_w, this));
-
-      if (visible_menu_layer_ == visible::show)
-        new_w->attach_button(ui_event_destination::make_ui<widget_menu_layer <widget_main>>(ui_, cc, new_w, this));
+      {
+        new_w->attach_button(ui_event_destination::make_ui<widget_menu_option           <widget_main>>(ui_, cc, new_w, this));
+        new_w->attach_button(ui_event_destination::make_ui<widget_menu_layer            <widget_main>>(ui_, cc, new_w, this));
+        new_w->attach_button(ui_event_destination::make_ui<widget_menu_projection_button<widget_main>>(ui_, cc, new_w, this));
+        new_w->attach_button(ui_event_destination::make_ui<widget_menu_download_button  <widget_main>>(ui_, cc, new_w, this));
+      }
 
       widget_control_ = new_w;
     }
@@ -596,7 +614,7 @@ public:
   {
     std::string_view protein_db;
     std::string_view protein_id;
-    std::string_view title;
+    std::string_view description;
     projection::view projection;
     std::string_view view;
     int              current_frame;
@@ -607,9 +625,9 @@ public:
 
     static constexpr std::array<std::string_view, 10> lookup_ =
     {{
-      "protein_db", "protein_id", "title", "projection", "view", "current_frame", "playing", "direction", "controls", "layers"
+      "protein_db", "protein_id", "description", "projection", "view", "current_frame", "playing", "direction", "controls", "layers"
     }};
-    static constexpr std::uint64_t must_ = mask_of(std::array<std::string_view, 3>{{ "protein_db", "protein_id", "title" }}, lookup_);
+    static constexpr std::uint64_t must_ = mask_of(std::array<std::string_view,0>{}/* 3>{{ "protein_db", "protein_id", "description" }}*/, lookup_);
     static constexpr std::uint64_t may_  = std::numeric_limits<std::uint64_t>::max();
   };
 
@@ -625,6 +643,50 @@ public:
   };
 
 
+  bool start_style_json(std::string_view s) noexcept
+  {
+    auto h = json_parse_struct<json_main>(s);
+
+    if (!h.ok)
+      return false;
+
+    if (h.has(h.mask_of("protein_db")) || h.has(h.mask_of("protein_id")))
+    {
+      log_error(FMT_COMPILE("Error in start_style_json: attempting to set protein_db and/or protein_id (to {} and {})"), h.data.protein_db, h.data.protein_id);
+      return false;
+    }
+
+    if (h.has(h.mask_of("description")))
+      description_ = h.data.description;
+
+    set_title();
+
+    if (h.has(h.mask_of("projection")))
+      ui_->projection_.set_view(h.data.projection);
+
+    if (h.has(h.mask_of("layers")))
+    {
+      auto hl = json_parse_vector<json_layers>(h.data.layers);
+
+      if (!hl.ok)
+        return false;
+
+      layers_config_ = std::move(hl.data);
+    }
+
+    if (h.has(h.mask_of("view")))
+    {
+      if (!widget_object_->set_to_json(h.data.view))
+        return false;
+
+      scale_has_been_set_ = true;
+    }
+
+    ui_->do_draw();
+
+    return true;
+  }
+
   bool start_json(std::string_view s) noexcept
   {
     auto h = json_parse_struct<json_main>(s);
@@ -636,9 +698,14 @@ public:
 
     is_remote_ = true;
 
-    url_         = h.data.protein_db;
-    item_        = h.data.protein_id;
-    description_ = h.data.title;
+    if (h.has(h.mask_of("protein_db")))
+      url_         = h.data.protein_db;
+
+    if (h.has(h.mask_of("protein_id")))
+      item_        = h.data.protein_id;
+
+    if (h.has(h.mask_of("description")))
+      description_ = h.data.description;
 
     if (h.has(h.mask_of("projection")))
       ui_->projection_.set_view(h.data.projection);
@@ -693,7 +760,7 @@ public:
       w->disconnect_from_parent();
       w.reset();
     }
-
+      
     return true;
   }
 
@@ -769,12 +836,12 @@ private:
       for (auto& lc : layers_config_)
         if (lc.display == visible::show)
         {
-          if (lc.type == "cartoon")
+          if (lc.type == "layer_cartoon")
           {
             l = ui_event_destination::make_ui<widget_layer_cartoon<widget_main>>(ui_, coords_, widget_object_, this);
             break;
           }
-          if (lc.type == "spacefill")
+          if (lc.type == "layer_spacefill")
           {
             l = ui_event_destination::make_ui<widget_layer_spacefill<widget_main>>(ui_, coords_, widget_object_, this);
             break;
@@ -952,17 +1019,37 @@ private:
 template <>
 struct fmt::formatter<pdbmovie::widget_main>
 {
+  // 'a' means serialize entire state; 's' means only style
+  char presentation = 'a';
+
   constexpr auto parse(format_parse_context& ctx)
   {
-    return ctx.begin(); // there are no options
+    auto it  = ctx.begin();
+    auto end = ctx.end();
+
+    if (it != end && (*it == 'a' || *it == 's'))
+      presentation = *it++;
+
+    if (it != end && *it != '}')
+      throw format_error("invalid format when formatting pdbmovie::widget_main");
+
+    return it;
   }
 
   template<typename FormatContext>
-  auto format(const pdbmovie::widget_main& w, FormatContext& ctx)
+  auto format(const pdbmovie::widget_main& w, FormatContext& ctx) const
   {
-    return format_to(ctx.out(), FMT_COMPILE(R"({{ "protein_db":"{}", "protein_id":"{}", "title":"{}", "projection":"{}", "view":{}, "current_frame":"{}", "playing":{}, "direction":"{}" }})"),
-      w.url_, w.item_, w.description_, magic_enum::enum_name(w.ui_->projection_.get_view()),
-      *w.widget_object_, w.current_entry_, w.playing_, magic_enum::enum_name(w.frame_direction_));
+    log_debug(FMT_COMPILE("w.layers_.size(): {}"), w.layers_.size());
+    log_debug(FMT_COMPILE("w.layers_[0]->is_hidden(): {}"), w.layers_[0]->is_hidden());
+    log_debug(FMT_COMPILE("w.layers_[0]->name(): {}"), w.layers_[0]->name());
+
+    if (presentation == 's')
+      return format_to(ctx.out(), FMT_COMPILE(R"({{ "description":"{}", "projection":"{}", "view":{}, "layers":{{ "display":"{}", "type":"{}" }} }})"),
+        w.description_, magic_enum::enum_name(w.ui_->projection_.get_view()), *w.widget_object_, "show", w.layers_[0]->is_hidden()?w.layers_[1]->name():w.layers_[0]->name());
+    else
+      return format_to(ctx.out(), FMT_COMPILE(R"({{ "protein_db":"{}", "protein_id":"{}", "description":"{}", "projection":"{}", "view":{}, "current_frame":{}, "playing":{}, "direction":"{}", "layers":{{ "display":"{}", "type":"{}" }} }})"),
+        w.url_, w.item_, w.description_, magic_enum::enum_name(w.ui_->projection_.get_view()), *w.widget_object_, w.current_entry_, w.playing_, magic_enum::enum_name(w.frame_direction_), "show", w.layers_[0]->is_hidden()?w.layers_[1]->name():w.layers_[0]->name());
+
   }
 };
 
