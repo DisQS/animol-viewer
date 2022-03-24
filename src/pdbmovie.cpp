@@ -15,11 +15,12 @@ class movie {
 public:
 
 
-  movie(std::string canvas, std::string url, std::string code, std::string description) noexcept
+  movie(std::string canvas, std::string url, std::string code, std::string description, const std::string mode = "invalid"/*TODO: make argument mandatory*/) noexcept
+    : url_(url), code_(code), description_(description),
+      mode_(magic_enum::enum_cast<animol::Mode>(mode).has_value() ? magic_enum::enum_cast<animol::Mode>(mode).value() : animol::Mode::invalid)
   {
-    url_ = url;
-    code_ = code;
-    description_ = description;
+    if (mode_ == animol::Mode::invalid)
+      log_error(FMT_COMPILE("Attempt to create animol-viewer with invalid mode: \"{}\""), mode);
 
     s_ = plate::create(canvas, "/font/Roboto-Regular-32-small-msdf.ttf", [this] (bool status)
     {
@@ -233,7 +234,7 @@ private:
 
     // start main widget
 
-    w_ = plate::ui_event_destination::make_ui<animol::widget_main>(s_, b, url_, code_, description_);
+    w_ = plate::ui_event_destination::make_ui<animol::widget_main>(s_, b, url_, code_, description_, mode_);
 
     if (!local_files_.empty() && url_.empty() && code_.empty())
     {
@@ -266,6 +267,8 @@ private:
 
   std::shared_ptr<animol::widget_main> w_{};
 
+  const animol::Mode mode_;
+
 }; // class movie
 
 
@@ -273,14 +276,15 @@ private:
 EMSCRIPTEN_BINDINGS(movie)
 {
   emscripten::class_<movie>("movie")
-    .constructor<std::string, std::string, std::string, std::string>()
-    .function("set",        &movie::set)
-    .function("set_without_changing_style",        &movie::set_without_changing_style)
-    .function("set_protein_and_style_json",        &movie::set_protein_and_style_json)
-    .function("set_json",   &movie::set_json)
-    .function("set_style_json",   &movie::set_style_json)
-    .function("get_json",   &movie::get_json)
-    .function("get_style_json",   &movie::get_style_json)
-    .function("open_local", &movie::open_local)
+    .constructor<std::string, std::string, std::string, std::string, std::string>()
+    .constructor<std::string, std::string, std::string, std::string>() //TODO: remove this
+    .function("set",                        &movie::set)
+    .function("set_without_changing_style", &movie::set_without_changing_style)
+    .function("set_protein_and_style_json", &movie::set_protein_and_style_json)
+    .function("set_json",                   &movie::set_json)
+    .function("set_style_json",             &movie::set_style_json)
+    .function("get_json",                   &movie::get_json)
+    .function("get_style_json",             &movie::get_style_json)
+    .function("open_local",                 &movie::open_local)
     ;
 }

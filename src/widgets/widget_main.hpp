@@ -36,6 +36,16 @@ constexpr underlying_type_t<Enum> to_underlying( Enum e ) noexcept
 
 namespace animol {
 
+enum class Mode
+{
+  invalid,
+  viewer,
+  window,
+  creator,
+  example
+};
+
+
 using namespace plate;
 
 class widget_main : public plate::ui_event_destination
@@ -59,13 +69,14 @@ public:
   std::unique_ptr<worker> worker_; // a multi-threaded worker for performaing background tasks
 
 
-  void init(const std::shared_ptr<plate::state>& _ui, plate::gpu::int_box& coords, std::string url, std::string code, std::string description) noexcept
+  void init(const std::shared_ptr<plate::state>& _ui, plate::gpu::int_box& coords, std::string url, std::string code, std::string description, Mode mode) noexcept
   {
     ui_event_destination::init(_ui, coords, Prop::Display | Prop::Reshape);
 
     url_         = url;
     item_        = code;
     description_ = description;
+    mode_        = mode;
 
     widget_object_ = ui_event_destination::make_ui<widget_object<vert_with_color>>(ui_, coords_,
                                           Prop::Display | Prop::Input | Prop::Swipe | Prop::Priority, shared_from_this());
@@ -598,10 +609,15 @@ public:
 
       if (visible_menu_option_ == visible::show)
       {
-        new_w->attach_button(ui_event_destination::make_ui<widget_menu_option           <widget_main>>(ui_, cc, new_w, this));
-        new_w->attach_button(ui_event_destination::make_ui<widget_menu_layer            <widget_main>>(ui_, cc, new_w, this));
-        new_w->attach_button(ui_event_destination::make_ui<widget_menu_projection_button<widget_main>>(ui_, cc, new_w, this));
-        new_w->attach_button(ui_event_destination::make_ui<widget_menu_download_button  <widget_main>>(ui_, cc, new_w, this));
+        if (mode_ == Mode::viewer || mode_ == Mode::creator)
+        {
+          new_w->attach_button(ui_event_destination::make_ui<widget_menu_option           <widget_main>>(ui_, cc, new_w, this));
+          new_w->attach_button(ui_event_destination::make_ui<widget_menu_layer            <widget_main>>(ui_, cc, new_w, this));
+          new_w->attach_button(ui_event_destination::make_ui<widget_menu_projection_button<widget_main>>(ui_, cc, new_w, this));
+        }
+
+        if (mode_ == Mode::viewer || mode_ == Mode::example)
+          new_w->attach_button(ui_event_destination::make_ui<widget_menu_download_button  <widget_main>>(ui_, cc, new_w, this));
       }
 
       widget_control_ = new_w;
@@ -994,6 +1010,8 @@ private:
   std::weak_ptr<widget_control<widget_main>> widget_control_;
 
   std::string loading_error_;
+
+  Mode mode_;
 
   bool playing_{true};
 
