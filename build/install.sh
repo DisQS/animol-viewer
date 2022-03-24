@@ -38,4 +38,8 @@ chmod a+xr -R temp-web
 
 rsync -auWe 'ssh' temp-web/* $1:/data/www/html/animol-viewer/
 
+git describe --tags --long | tee viewer-version.txt
+
+rsync -auWe 'ssh' viewer-version.txt $1:/data/www/html/versions/
+
 exit 0
