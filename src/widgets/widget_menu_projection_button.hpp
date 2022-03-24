@@ -51,9 +51,9 @@ public:
   }
 
 
-  std::string_view name() const noexcept override
+  constexpr std::string_view name() const noexcept override
   {
-    return "menu_layers";
+    return "projection_button";
   }
 
 

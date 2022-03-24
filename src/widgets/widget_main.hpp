@@ -408,24 +408,39 @@ public:
         return;
       }
 
-      if (code_utf8 == "KeyS") // test save
+      if (code_utf8 == "KeyF") // toggle fullscreen
+      {
+        if (auto w = widget_control_.lock())
+        {
+          if (auto button = dynamic_cast<widget_menu_fullscreen_button<widget_main>*>(w->get_button("fullscreen_button").get()))
+            button->toggle_fullscreen();
+          else
+            log_error(FMT_COMPILE("Attempt to cast to widget_menu_fullscreen_button from incompatible type with name {}"), button->name());
+        }
+        else
+          log_debug(FMT_COMPILE("Attempt to switch to fullscreen ({}) when no fullscreen button present"), code_utf8);
+
+        return;
+      }
+
+      if (code_utf8 == "KeyS") // test print style json
       {
         std::string s = fmt::format(FMT_COMPILE("{:s}"), *this);
         log_debug(FMT_COMPILE("json: {}"), s);
         return;
       }
-      if (code_utf8 == "KeyD") // test save
+      if (code_utf8 == "KeyD") // test print full json
       {
         std::string s = fmt::format(FMT_COMPILE("{}"), *this);
         log_debug(FMT_COMPILE("json: {}"), s);
         return;
       }
-      if (code_utf8 == "KeyA") // test save
+      /*if (code_utf8 == "KeyA") // test set json
       {
         std::string s = "{\"direction\":{ \"i\":0.21085691851366614, \"j\":-0.29399037430736813, \"k\":0.04799895168768374, \"w\":0.9310236948469239, \"normalized\":true }, \"scale\":945.2565}";
         widget_object_->set_to_json(s);
         return;
-      }
+      }*/
 
       log_debug(FMT_COMPILE("ignored key: {}"), code_utf8);
     }

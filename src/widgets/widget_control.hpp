@@ -107,6 +107,19 @@ public:
   }
 
 
+  std::shared_ptr<plate::ui_event_destination> get_button(const std::string_view name) noexcept
+  {
+    for (auto button_ptr : widget_buttons_)
+      if (auto button = button_ptr.lock())
+        if (button->name() == name)
+          return button;
+
+    log_debug(FMT_COMPILE("Attempt to find non-existent button {} in {}"), name, this->name());
+
+    return nullptr;
+  }
+
+
   void set_geometry(const gpu::int_box& coords) noexcept
   {
     bool height_changed = false;
@@ -239,7 +252,7 @@ public:
   }
 
 
-  std::string_view name() const noexcept
+  constexpr std::string_view name() const noexcept
   {
     return "control";
   }

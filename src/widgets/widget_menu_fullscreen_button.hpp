@@ -65,9 +65,16 @@ public:
   }
 
 
-  std::string_view name() const noexcept override
+  constexpr std::string_view name() const noexcept override
   {
-    return "menu_layers";
+    return "fullscreen_button";
+  }
+
+
+  void toggle_fullscreen() noexcept
+  {
+    create_button(!ui_event::is_fullscreen());
+    ui_event::to_fullscreen(viewer_->ui_);
   }
 
 
@@ -164,8 +171,7 @@ protected:
 
     widget_menu_->set_click_cb([this]
     {
-      create_button(!ui_event::is_fullscreen());
-      ui_event::to_fullscreen(viewer_->ui_);
+      toggle_fullscreen();
     });
   }
 
