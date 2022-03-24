@@ -538,13 +538,19 @@ void stop()
 void init();
 
 
-template<class S>
-void to_fullscreen(std::shared_ptr<S> s)
+bool is_fullscreen()
 {
   EmscriptenFullscreenChangeEvent e;
   emscripten_get_fullscreen_status(&e);
 
-  if (e.isFullscreen == EM_TRUE)
+  return e.isFullscreen == EM_TRUE;
+}
+
+
+template<class S>
+void to_fullscreen(std::shared_ptr<S> s)
+{
+  if (is_fullscreen())
   {
     emscripten_exit_fullscreen();
     return;

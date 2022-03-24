@@ -74,8 +74,16 @@ public:
 protected:
 
   
-  void create_button() noexcept
+  // passing fullscreen_override causes ui::event::is_fullscreen() to be ignored
+  // when deciding whether to draw a maximize or minimize fullscreen
+  void create_button(const std::optional<bool> fullscreen_override = std::optional<bool>{}) noexcept
   {
+    if (widget_menu_)
+    {
+      widget_menu_->disconnect_from_parent();
+      widget_menu_->hide();
+    }
+
     static constexpr int sz = 120;
     static constexpr int w  = sz * 4;;
 
@@ -99,9 +107,9 @@ protected:
         }
       }
 
-
+      // arrowstalks
       for (int row = 0; row < sz; ++row)
-        for (int col = std::max(0, sz - row - sz/8); col < std::min(sz - row + sz/8, sz); ++col)
+        for (int col = std::max(row - sz*7/8, sz*7/8 - row); col < std::min(sz*9/8 - row, row + sz*7/8); ++col)
         {
           if (row - col > sz/8 || row - col < -sz/8)
           {
@@ -110,51 +118,43 @@ protected:
           }
         }
 
-      for (int row = 0; row < sz/3; ++row)
-        for (int col = row + sz*2/3; col < sz; ++col)
-        {
-          int offset = (row * w) + (col * 4);
-          bitmap[offset+3] = 255;
-        }
+      // arrowheads
+      // if we want to draw a minimize symbol (instead of maximize)
+      if (fullscreen_override ? *fullscreen_override : ui_event::is_fullscreen())
+      {
+        for (int row = sz/2; row < sz*5/6; ++row)
+          for (int col = row - sz*1/3; col < sz/2; ++col)
+          {
+            int offset = (row * w) + (col * 4);
+            bitmap[offset+3] = 255;
+          }
 
-      for (int row = sz*2/3; row < sz; ++row)
-        for (int col = 0; col < row - sz*2/3; ++col)
-        {
-          int offset = (row * w) + (col * 4);
-          bitmap[offset+3] = 255;
-        }
+        for (int row = sz*1/6; row < sz/2; ++row)
+          for (int col = sz/2; col < row + sz*1/3; ++col)
+          {
+            int offset = (row * w) + (col * 4);
+            bitmap[offset+3] = 255;
+          }
+      }
+      else
+      {
+        for (int row = 0; row < sz/3; ++row)
+          for (int col = row + sz*2/3; col < sz; ++col)
+          {
+            int offset = (row * w) + (col * 4);
+            bitmap[offset+3] = 255;
+          }
+
+        for (int row = sz*2/3; row < sz; ++row)
+          for (int col = 0; col < row - sz*2/3; ++col)
+          {
+            int offset = (row * w) + (col * 4);
+            bitmap[offset+3] = 255;
+          }
+      }
 
       return bitmap;
     }();
-
-    /*float top_spacing = coords_.height() / 11.0;
-    float sz = top_spacing * 6;
-    float x_off = top_spacing * 2.0;
-    float spacing = top_spacing * 6.0 / 5.0;
-
-    gpu::int_box button_coords = { { coords_.p1.x, coords_.p1.y },
-                                   { coords_.p1.x + static_cast<int>(2*x_off + sz), coords_.p1.y + static_cast<int>(2*top_spacing + sz) } };*/
-
-    /*float top_spacing = coords_.height() / 11.0;
-
-    int sz = top_spacing * 6;
-
-    int x_off = top_spacing * 2;
-
-    // the actual width of each button is sz + 2 * x_off (x_off either side of sz to help touch)
-
-    gpu::int_box button_coords = { { coords_.p1.x, coords_.p1.y },
-                                   { coords_.p1.x + (2*x_off) + sz, coords_.p1.y + static_cast<int>(2*top_spacing) + sz } };
-
-    float spacing = top_spacing * 6.0 / 5.0;
-
-
-    std::array<shader_basic::basic_vertex, 3> v_play =
-    {{
-      {x_off + spacing * 1.0f, spacing * 2.0f, 0.0f, 1.0f},
-      {x_off + spacing * 1.0f, spacing * 5.0f, 0.0f, 1.0f},
-      {x_off + spacing * 4.0f, spacing * 3.5f, 0.0f, 1.0f}
-    }};*/
 
     texture t(reinterpret_cast<const std::byte*>(&bitmap[0]), sz * sz * 4, sz, sz, 4);
     t.upload();
@@ -162,11 +162,9 @@ protected:
     widget_menu_ = ui_event_destination::make_ui<widget_texture>(ui_, coords_, Prop::Display, shared_from_this(),
                                                                         std::move(t), widget_texture::options::STRETCH);
 
-    //widget_menu_ = ui_event_destination::make_ui<widget_basic_vertex>(ui_, button_coords, shared_from_this(),
-    //                                                                    ui_->txt_color_, v_play);
-
-    widget_menu_->set_click_cb([this] ()
+    widget_menu_->set_click_cb([this]
     {
+      create_button(!ui_event::is_fullscreen());
       ui_event::to_fullscreen(viewer_->ui_);
     });
   }
@@ -227,12 +225,6 @@ protected:
     {
       if (s == "Download data")
       {
-        /*EM_ASM(
-          console.log('a');
-          downloadFolder('#fullscreen');
-          console.log('b');
-        );*/
-        //std::string command = std::string{"downloadFolder('"} + std::string{viewer_->ui_->name_.data()} + std::string{"')"};
         //emscripten_run_script(command.data());
         emscripten_run_script(std::string{"downloadFolder('" + viewer_->ui_->name_ + "')"}.data());
 
@@ -325,7 +317,6 @@ protected:
       widget_menu_list_->set_geometry(coords);
     }
   }
-
 
   std::shared_ptr<widget_texture>                     widget_menu_;
 
