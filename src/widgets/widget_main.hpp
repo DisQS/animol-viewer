@@ -340,7 +340,7 @@ public:
     {
       interacted();
 
-      if (code_utf8 == "Space")
+      if (code_utf8 == "Space" || code_utf8 == "KeyK") // toggle pause
       {
         set_playing(!playing_);
 
@@ -350,13 +350,13 @@ public:
         return;
       }
 
-      if (code_utf8 == "ArrowLeft") // go back one second
+      if (code_utf8 == "ArrowLeft" || code_utf8 == "KeyJ") // go back one second
       {
         set_frame(current_entry_ - (1.0 / frame_time_));
         return;
       }
 
-      if (code_utf8 == "ArrowRight") // go forwards one second
+      if (code_utf8 == "ArrowRight" || code_utf8 == "KeyL") // go forwards one second
       {
         set_frame(current_entry_ + (1.0 / frame_time_));
         return;
