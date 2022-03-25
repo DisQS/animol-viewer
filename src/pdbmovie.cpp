@@ -173,10 +173,10 @@ private:
   
     if (w_->has_frame()) // there is a protein displayed, so slide it away, and slide new one in
     {
-      auto slide_out = plate::ui_event_destination::make_anim<plate::anim_projection>(
-                s_, w_, plate::anim_projection::Options::None, -w_->my_width(), 0, 0, plate::ui_anim::Dir::Reverse, 0.4f);
   
-      slide_out->set_end_cb([w(w_)]
+      auto fade_out = plate::ui_event_destination::make_anim<plate::anim_alpha>(s_, w_, plate::ui_anim::Dir::Reverse, 0.18f);
+  
+      fade_out->set_end_cb([w(w_)]
       {
         w->disconnect_from_parent();
       });
@@ -184,7 +184,7 @@ private:
       run();
   
       auto slide_in = plate::ui_event_destination::make_anim<plate::anim_projection>(
-               s_, w_, plate::anim_projection::Options::None, w_->my_width(), 0, 0, plate::ui_anim::Dir::Forward, 0.4f);
+               s_, w_, plate::anim_projection::Options::None, 0, w_->my_height(), 0, plate::ui_anim::Dir::Forward, 0.5f);
     }
     else // no protein displayed, so quickly fade the current screen away and show the new protein
     {
