@@ -20,6 +20,7 @@
 #include "widget_menu_option.hpp"
 #include "widget_menu_download_button.hpp"
 #include "widget_menu_fullscreen_button.hpp"
+#include "widget_menu_new_tab_button.hpp"
 #include "widget_menu_projection_button.hpp"
 #include "widget_menu_layer.hpp"
 
@@ -605,7 +606,10 @@ public:
 
       // create menu
       
-      new_w->attach_button(ui_event_destination::make_ui<widget_menu_fullscreen_button<widget_main>>(ui_, cc, new_w, this));
+      if (mode_ == Mode::window || mode_ == Mode::example)
+        new_w->attach_button(ui_event_destination::make_ui<widget_menu_new_tab_button<widget_main>>(ui_, cc, new_w, this));
+      else
+        new_w->attach_button(ui_event_destination::make_ui<widget_menu_fullscreen_button<widget_main>>(ui_, cc, new_w, this));
 
       if (visible_menu_option_ == visible::show)
       {
