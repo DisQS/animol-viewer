@@ -61,25 +61,31 @@ public:
     animate();
 
     if (!json_style_config_.empty())
-      w_->start_style_json(json_style_config_); 
+    {
+      w_->set_json_style_number(json_style_number_);
+      if (!w_->start_style_json(json_style_config_))
+        log_error("failed parsing json config in set_without_changing_style:");
+    }
   }
 
 
-  void set_protein_and_style_json(std::string code, std::string json_style_config)
+  void set_protein_and_style_json(std::string code, std::string json_style_config, int json_style_number)
   {
     emscripten_webgl_make_context_current(s_->ctx_);
 
-    log_debug(FMT_COMPILE("set_protein_and_style_json: {}, {}"), code, json_style_config);
+    log_debug(FMT_COMPILE("set_protein_and_style_json: {}, {}, {}"), code, json_style_config, json_style_number);
 
     code_ = code;
 
     json_config_ = "";
     json_style_config_ = json_style_config;
+    json_style_number_ = json_style_number;
 
     local_files_.clear();
 
     animate();
 
+    w_->set_json_style_number(json_style_number_);
     if (!w_->start_style_json(json_style_config_))
         log_error("failed parsing json config in set_protein_and_style_json:");
   }
@@ -260,6 +266,7 @@ private:
 
   std::string json_config_;
   std::string json_style_config_;
+  int json_style_number_{0};
 
   std::string url_;
   std::string code_;

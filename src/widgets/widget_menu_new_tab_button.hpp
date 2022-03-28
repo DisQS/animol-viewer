@@ -138,6 +138,10 @@ protected:
       std::string url = viewer_->get_url();
       std::string redirect = url.substr(0, url.size() - 3) + "view/" + viewer_->get_item();
 
+      if (int n = viewer_->get_json_style_number())
+        redirect += "/" + std::to_string(n);
+
+
       EM_ASM({
         window.open(UTF8ToString($0, $1), '_blank');//.focus();
         }, redirect.c_str(), redirect.size());

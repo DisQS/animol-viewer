@@ -678,6 +678,19 @@ public:
   };
 
 
+  void set_json_style_number(int json_style_number) noexcept
+  {
+    json_style_number_ = json_style_number;
+  }
+
+
+  int get_json_style_number() noexcept
+  {
+    return json_style_number_;
+  }
+
+
+
   bool start_style_json(std::string_view s) noexcept
   {
     auto h = json_parse_struct<json_main>(s);
@@ -1029,8 +1042,9 @@ private:
   bool is_remote_{true};
   std::string description_{}; // description of animation
 
-  std::string item_;   // item to load (either a protein code if remote, or a local directory name)
-  std::string url_;    // location of remote pdb files
+  std::string item_;      // item to load (either a protein code if remote, or a local directory name)
+  std::string url_;       // location of remote pdb files
+  int json_style_number_; // number of json style used
 
   std::vector<std::string> per_frame_files_;
   int master_frame_id_;
