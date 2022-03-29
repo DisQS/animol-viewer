@@ -18,6 +18,7 @@
 
 #include "widget_control.hpp"
 #include "widget_menu_option.hpp"
+#include "widget_menu_home_button.hpp"
 #include "widget_menu_download_button.hpp"
 #include "widget_menu_fullscreen_button.hpp"
 #include "widget_menu_new_tab_button.hpp"
@@ -622,6 +623,9 @@ public:
 
         if (mode_ == Mode::viewer || mode_ == Mode::example)
           new_w->attach_button(ui_event_destination::make_ui<widget_menu_download_button  <widget_main>>(ui_, cc, new_w, this));
+
+        if (mode_ == Mode::viewer)
+          new_w->attach_button(ui_event_destination::make_ui<widget_menu_home_button  <widget_main>>(ui_, cc, new_w, this));
       }
 
       widget_control_ = new_w;
