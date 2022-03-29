@@ -96,8 +96,13 @@ protected:
 
         for (int col = fm; col < sz - fm; ++col)
         {
-          int offset = (row * w) + (col * 4);
-          bitmap[offset+3] = 255;
+          const int r = (row-sz/2)*(row-sz/2) + (col-sz/2)*(col-sz/2);
+
+          if (r > sz/6*sz/6 || r < sz/15*sz/15)
+          {
+            int offset = (row * w) + (col * 4);
+            bitmap[offset+3] = 255;
+          }
         }
       }
       return bitmap;

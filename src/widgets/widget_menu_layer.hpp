@@ -104,11 +104,13 @@ protected:
             return (col-xproj)*(col-xproj) + (row-yproj)*(row-yproj) < r*r;
           };
 
-          if (   circle(sz*1/8, sz*7/8, sz/5)
-              || circle(sz*1/2, sz*1/8, sz/5)
-              || circle(sz*7/8, sz*5/8, sz/5)
-              || line(sz*1/8, sz*7/8, sz*1/2, sz*1/8, sz/15)
-              || line(sz*7/8, sz*5/8, sz*1/2, sz*1/8, sz/15)
+          if (   circle(sz*1/6, sz*5/6, sz/6)
+              || circle(sz*1/3, sz*1/6, sz/6)
+              || circle(sz*5/6, sz*1/3, sz/6)
+              || circle(sz*2/3, sz*5/6, sz/6)
+              || line(sz*1/6, sz*5/6, sz*1/3, sz*1/6, sz/20)
+              || line(sz*5/6, sz*1/3, sz*1/3, sz*1/6, sz/20)
+              || line(sz*5/6, sz*1/3, sz*2/3, sz*5/6, sz/20)
              )
           {
             int offset = (row * w) + (col * 4);
