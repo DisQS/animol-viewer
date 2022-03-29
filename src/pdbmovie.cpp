@@ -76,18 +76,14 @@ public:
     log_debug(FMT_COMPILE("set_protein_and_style_json: {}, {}, {}"), code, json_style_config, json_style_number);
 
     code_ = code;
-
     json_config_ = "";
     json_style_config_ = json_style_config;
     json_style_number_ = json_style_number;
+    restyle_needed_ = true;
 
     local_files_.clear();
 
     animate();
-
-    w_->set_json_style_number(json_style_number_);
-    if (!w_->start_style_json(json_style_config_))
-        log_error("failed parsing json config in set_protein_and_style_json:");
   }
 
 
@@ -114,8 +110,6 @@ public:
     emscripten_webgl_make_context_current(s_->ctx_);
 
     log_debug(FMT_COMPILE("set_style_json: {}"), json_style_config);
-
-    //while (!w_) {}
 
     json_style_config_ = json_style_config;
 
@@ -177,32 +171,33 @@ private:
  
     w_->stop();
   
-    if (w_->has_frame()) // there is a protein displayed, so slide it away, and slide new one in
+    if (w_->has_frame()) // there is a protein displayed, so fade it away, and slide new one in (quickly)
     {
-  
-      auto fade_out = plate::ui_event_destination::make_anim<plate::anim_alpha>(s_, w_, plate::ui_anim::Dir::Reverse, 0.18f);
+      auto fade_out = plate::ui_event_destination::make_anim<plate::anim_alpha>(s_, w_, plate::ui_anim::Dir::Reverse, 0.1f);
   
       fade_out->set_end_cb([w(w_)]
       {
         w->disconnect_from_parent();
       });
-  
+
       run();
-  
+
       auto slide_in = plate::ui_event_destination::make_anim<plate::anim_projection>(
-               s_, w_, plate::anim_projection::Options::None, 0, w_->my_height(), 0, plate::ui_anim::Dir::Forward, 0.5f);
+             s_, w_, plate::anim_projection::Options::None, 0, w_->my_height(), 0, plate::ui_anim::Dir::Forward, 0.1f);
     }
     else // no protein displayed, so quickly fade the current screen away and show the new protein
     {
       auto fade_out = plate::ui_event_destination::make_anim<plate::anim_alpha>(s_, w_, plate::ui_anim::Dir::Reverse, 0.2f);
-  
+
       fade_out->set_end_cb([w(w_)]
       {
         w->disconnect_from_parent();
       });
-  
+
       run();
     }
+
+    return;
   }
 
 
@@ -242,6 +237,16 @@ private:
 
     w_ = plate::ui_event_destination::make_ui<animol::widget_main>(s_, b, url_, code_, description_, mode_);
 
+    if (restyle_needed_)
+    {
+      restyle_needed_ = false;
+
+      w_->set_json_style_number(json_style_number_);
+
+      if (!w_->start_style_json(json_style_config_))
+        log_error("failed parsing json config in set_protein_and_style_json:");
+    }
+
     if (!local_files_.empty() && url_.empty() && code_.empty())
     {
       w_->start_local("", local_files_);
@@ -267,6 +272,7 @@ private:
   std::string json_config_;
   std::string json_style_config_;
   int json_style_number_{0};
+  bool restyle_needed_{false};
 
   std::string url_;
   std::string code_;
