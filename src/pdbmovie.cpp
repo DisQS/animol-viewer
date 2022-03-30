@@ -37,6 +37,8 @@ public:
 
     code_ = code;
 
+    is_remote_ = false;
+
     json_config_ = "";
     local_files_.clear();
 
@@ -50,9 +52,9 @@ public:
 
     log_debug(FMT_COMPILE("set_without_changing_style: {}"), code);
 
-    //while (!w_) {}
-
     code_ = code;
+
+    is_remote_ = false;
 
     json_config_ = "";
     local_files_.clear();
@@ -75,6 +77,9 @@ public:
     log_debug(FMT_COMPILE("set_protein_and_style_json: {}, {}, {}"), code, json_style_config, json_style_number);
 
     code_ = code;
+
+    is_remote_ = false;
+
     json_config_ = "";
     json_style_config_ = json_style_config;
     json_style_number_ = json_style_number;
@@ -93,6 +98,8 @@ public:
     log_debug(FMT_COMPILE("set_json: {}"), json_config);
 
     json_config_ = json_config;
+
+    is_remote_ = false;
 
     code_ = "";
     description_ = "";
@@ -141,7 +148,8 @@ public:
 
     code_ = "";
     description_ = "";
-    url_ = "";
+
+    is_remote_ = true;
 
     local_files_.clear();
 
@@ -246,7 +254,7 @@ private:
         log_error("failed parsing json config in run");
     }
 
-    if (!local_files_.empty() && url_.empty() && code_.empty())
+    if (is_remote_)
     {
       w_->start_local("", local_files_);
       local_files_.clear();
@@ -276,6 +284,8 @@ private:
   std::string url_;
   std::string code_;
   std::string description_;
+
+  bool is_remote_{false};
 
   std::shared_ptr<animol::widget_main> w_{};
 
