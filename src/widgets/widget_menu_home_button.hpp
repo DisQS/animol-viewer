@@ -216,11 +216,11 @@ protected:
 
     widget_menu_list_->set_selection_cb([this] (std::uint32_t i, std::string_view s)
     {
-      std::string url = viewer_->get_url();
-      std::string redirect = url.substr(0, url.size() - 3);
-
       if (s == "Go to homepage")
       {
+        std::string url = viewer_->get_url();
+        std::string redirect = url.substr(0, url.size() - 3);
+
         EM_ASM({
           window.open(UTF8ToString($0, $1), '_self');
         }, redirect.c_str(), redirect.size());

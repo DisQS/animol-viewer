@@ -29,14 +29,13 @@ public:
   }
 
 
-  void set(std::string code/*, std::string description*/)
+  void set(std::string code)
   {
     emscripten_webgl_make_context_current(s_->ctx_);
 
     log_debug(FMT_COMPILE("set: {}"), code);
 
     code_ = code;
-    //description_ = description;
 
     json_config_ = "";
     local_files_.clear();
@@ -244,7 +243,7 @@ private:
       w_->set_json_style_number(json_style_number_);
 
       if (!w_->start_style_json(json_style_config_))
-        log_error("failed parsing json config in set_protein_and_style_json:");
+        log_error("failed parsing json config in run");
     }
 
     if (!local_files_.empty() && url_.empty() && code_.empty())
@@ -272,7 +271,7 @@ private:
   std::string json_config_;
   std::string json_style_config_;
   int json_style_number_{0};
-  bool restyle_needed_{false};
+  bool restyle_needed_{false}; // indicates json_style_config_ and json_style_number_ need to be applied
 
   std::string url_;
   std::string code_;

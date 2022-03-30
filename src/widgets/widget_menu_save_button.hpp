@@ -86,24 +86,25 @@ protected:
       }
 
       for (int row = 0; row < sz; ++row)
-        for (int col = 0; col < std::min(sz, row + sz*3/4); ++col)
+        for (int col = 0; col < std::min(sz, row + sz*3/4); ++col) // cut off top right corner
         {
+          // tab at top
           if (row > sz/8 && row < sz*5/16 && col > sz*1/2 && col < sz*11/16)
           {
             int offset = (row * w) + (col * 4);
             bitmap[offset+3] = 255;
           }
 
+          // space at top
           if (row > sz/16 && row < sz*3/8 && col > sz*1/4 && col < sz*3/4)
             continue;
 
+          // space at bottom
           if (row > sz/2 && row < sz*7/8 && col > sz*1/8 && col < sz*7/8)
             continue;
 
-          {
-            int offset = (row * w) + (col * 4);
-            bitmap[offset+3] = 255;
-          }
+          int offset = (row * w) + (col * 4);
+          bitmap[offset+3] = 255;
         }
 
       return bitmap;
