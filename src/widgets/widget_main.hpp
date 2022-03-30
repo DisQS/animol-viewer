@@ -19,6 +19,7 @@
 #include "widget_control.hpp"
 #include "widget_menu_option.hpp"
 #include "widget_menu_home_button.hpp"
+#include "widget_menu_save_button.hpp"
 #include "widget_menu_download_button.hpp"
 #include "widget_menu_fullscreen_button.hpp"
 #include "widget_menu_new_tab_button.hpp"
@@ -625,7 +626,10 @@ public:
           new_w->attach_button(ui_event_destination::make_ui<widget_menu_download_button  <widget_main>>(ui_, cc, new_w, this));
 
         if (mode_ == Mode::viewer)
+        {
+          new_w->attach_button(ui_event_destination::make_ui<widget_menu_save_button  <widget_main>>(ui_, cc, new_w, this));
           new_w->attach_button(ui_event_destination::make_ui<widget_menu_home_button  <widget_main>>(ui_, cc, new_w, this));
+        }
       }
 
       widget_control_ = new_w;
@@ -697,6 +701,7 @@ public:
 
   bool start_style_json(std::string_view s) noexcept
   {
+    log_debug(FMT_COMPILE("start_style_json: {}"), s);
     auto h = json_parse_struct<json_main>(s);
 
     if (!h.ok)
@@ -1014,8 +1019,10 @@ private:
     }
     else
     {
+      log_debug(FMT_COMPILE("before {}"), "a");
       widget_title_ = ui_event_destination::make_ui<widget_text>(ui_, c, Prop::Display, shared_from_this(), title,
                                                         gpu::align::CENTER, ui_->txt_color_, gpu::rotation{0.0f,0.0f,0.0f}, 0.8f);
+      log_debug(FMT_COMPILE("after {}"), "b");
 
       auto fade_in = plate::ui_event_destination::make_anim<plate::anim_alpha>(ui_, widget_title_, plate::ui_anim::Dir::Forward, 0.4f);
     }
