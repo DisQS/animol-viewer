@@ -45,7 +45,10 @@ public:
 
   inline bool has_frame(int frame_id) noexcept override
   {
-    return store_[frame_id].ibuf.is_ready();
+    if (main_->is_remote())
+      return store_[0][frame_id].ibuf.is_ready() && store_[1][frame_id].ibuf.is_ready();
+    else
+      return store_[0][frame_id].ibuf.is_ready();
   }
 
 
@@ -54,7 +57,11 @@ public:
     if (!has_frame(frame_id))
       return false;
 
-    widget_spheres_->set_instance_ptr(&(store_[frame_id].ibuf), &(store_[frame_id].vao));
+    if (widget_spheres_[0])
+      widget_spheres_[0]->set_instance_ptr(&(store_[0][frame_id].ibuf), &(store_[0][frame_id].vao));
+
+    if (widget_spheres_[1])
+      widget_spheres_[1]->set_instance_ptr(&(store_[1][frame_id].ibuf), &(store_[1][frame_id].vao));
 
     return true;
   }
@@ -76,10 +83,15 @@ private:
     if (main_->get_total_frames() <= 0)
       return;
 
-    widget_spheres_ = plate::ui_event_destination::make_ui<plate::widget_spheres>(this->ui_, this->coords_,
+    widget_spheres_[0] = plate::ui_event_destination::make_ui<plate::widget_spheres>(this->ui_, this->coords_,
                                                               this->shared_from_this(), main_->get_shared_ubuf());
 
-    store_.resize(main_->get_total_frames());
+    if (main_->is_remote())
+      widget_spheres_[1] = plate::ui_event_destination::make_ui<plate::widget_spheres>(this->ui_, this->coords_,
+                                                              this->shared_from_this(), main_->get_shared_ubuf());
+
+    store_[0].resize(main_->get_total_frames());
+    store_[1].resize(main_->get_total_frames());
 
     // setup the load order- from current_frame
 
@@ -104,37 +116,58 @@ private:
 
     auto per_frame_files = main_->get_frame_files();
 
-    std::string u;
-
-    if (main_->is_remote())
-      u = main_->get_url() + main_->get_item() + "/" + per_frame_files[to_load];
-    else
-      u = per_frame_files[to_load];
-
-    main_->worker_->call("visualise_atoms_url", u, [this, wself{this->weak_from_this()}, entry = to_load] (std::span<char> d)
+    if (!main_->is_remote())
     {
-      if (auto w = wself.lock())
+      main_->worker_->call("visualise_atoms_url", per_frame_files[to_load], [this, wself{this->weak_from_this()}, entry = to_load] (std::span<char> d)
       {
-        emscripten_webgl_make_context_current(this->ui_->ctx_);
+        if (auto w = wself.lock())
+        {
+          emscripten_webgl_make_context_current(this->ui_->ctx_);
 
-        std::span<plate::widget_spheres::inst> s(reinterpret_cast<plate::widget_spheres::inst*>(d.data()), d.size() /
+          std::span<plate::widget_spheres::inst> s(reinterpret_cast<plate::widget_spheres::inst*>(d.data()), d.size() /
                                                                                          sizeof(plate::widget_spheres::inst));
 
-        process_frame(entry, s);
-      }
-    });
+          process_frame(entry, s, 0);
+        }
+      });
+    }
+    else // remote
+    {
+      std::string u1 = main_->get_url() + main_->get_item() + "/" + per_frame_files[to_load];
+      std::string u2 = main_->get_url() + main_->get_item() + "/nonCA_" + per_frame_files[to_load];
+
+      main_->worker_->call("visualise_atoms_url", u1, [this, wself{this->weak_from_this()}, entry = to_load] (std::span<char> d)
+      {
+        if (auto w = wself.lock())
+        {
+          emscripten_webgl_make_context_current(this->ui_->ctx_);
+
+          std::span<plate::widget_spheres::inst> s(reinterpret_cast<plate::widget_spheres::inst*>(d.data()), d.size() /
+                                                                                         sizeof(plate::widget_spheres::inst));
+
+          process_frame(entry, s, 0);
+        }
+      });
+
+      main_->worker_->call("visualise_atoms_url", u2, [this, wself{this->weak_from_this()}, entry = to_load] (std::span<char> d)
+      {
+        if (auto w = wself.lock())
+        {
+          emscripten_webgl_make_context_current(this->ui_->ctx_);
+
+          std::span<plate::widget_spheres::inst> s(reinterpret_cast<plate::widget_spheres::inst*>(d.data()), d.size() /
+                                                                                         sizeof(plate::widget_spheres::inst));
+
+          process_frame(entry, s, 1);
+        }
+      });
+    }
   }
 
 
-  void process_frame(int entry, std::span<plate::widget_spheres::inst> s) noexcept
+  void process_frame(int entry, std::span<plate::widget_spheres::inst> s, int layer) noexcept
   {
-    if (s.empty())
-    {
-      main_->set_error("Failed to process");
-      return;
-    }
-
-    if (!main_->scale_has_been_set())
+    if (!main_->scale_has_been_set() && !s.empty())
     {
       int max = 0;
 
@@ -151,19 +184,22 @@ private:
         main_->set_scale((std::min(this->my_width(), this->my_height())/2.0) * (32'768.0 / max) * 0.8);
     }
 
-    store_[entry].ibuf.upload(s.data(), s.size());
+    store_[layer][entry].ibuf.upload(s.data(), s.size());
 
     if (main_->get_current_frame() == entry) // we've caught up with main frame position
-      widget_spheres_->set_instance_ptr(&(store_[entry].ibuf), &(store_[entry].vao));
+      set_frame(entry);
     
-    ++loaded_count_;
+    if ((main_->is_remote() && layer == 1) || (!main_->is_remote()))
+    {
+      ++loaded_count_;
 
-    if (loaded_count_ == main_->get_total_frames())
-      log_debug(FMT_COMPILE("all loaded: {} atoms: {}"), loaded_count_, s.size());
+      if (loaded_count_ == main_->get_total_frames())
+        log_debug(FMT_COMPILE("all loaded: {} atoms: {}"), loaded_count_, s.size());
 
-    main_->update_loading();
+      main_->update_loading();
 
-    process_next();
+      process_next();
+    }
   }
 
 
@@ -174,21 +210,32 @@ private:
 
     loaded_count_ = 0;
 
-    if (widget_spheres_)
+    if (widget_spheres_[0])
     {
-      widget_spheres_->disconnect_from_parent();
-      widget_spheres_.reset();
+      widget_spheres_[0]->disconnect_from_parent();
+      widget_spheres_[0].reset();
+    }
+    if (widget_spheres_[1])
+    {
+      widget_spheres_[1]->disconnect_from_parent();
+      widget_spheres_[1].reset();
     }
 
-    for (auto& s : store_)
+    for (auto& s : store_[0])
       if (s.vao)
         glDeleteVertexArrays(1, &s.vao);
 
-    store_.clear();
+    store_[0].clear();
+    
+    for (auto& s : store_[1])
+      if (s.vao)
+        glDeleteVertexArrays(1, &s.vao);
+
+    store_[1].clear();
   }
 
 
-  std::shared_ptr<plate::widget_spheres> widget_spheres_;
+  std::shared_ptr<plate::widget_spheres> widget_spheres_[2];
 
   struct frame
   {
@@ -196,7 +243,7 @@ private:
     std::uint32_t                              vao{0};
   };
 
-  std::vector<frame> store_; // each frame's vertex and vertex_strip buffer is stored here
+  std::vector<frame> store_[2]; // each frame's vertex and vertex_strip buffer is stored here
 
   std::queue<int> to_load_; // the order in which to request frames
   int loaded_count_{0};
