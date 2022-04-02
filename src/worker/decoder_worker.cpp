@@ -5,6 +5,7 @@
 #include <emscripten/fetch.h>
 
 #include "visual.hpp"
+#include "cif2pdb.hpp"
 
 
 extern "C" {
@@ -33,6 +34,18 @@ float fast_float_c(const char* s)
 }
 
 
+// basic check to see if a file is in PDBx/mmCIF format
+// currently just check it starts with data_
+
+bool is_cif(std::span<const std::byte> data)
+{
+  if (data.size() < 5)
+    return false;
+
+  return std::memcmp(data.data(), "data_", 5) == 0;
+}
+
+
 struct fp
 {
   short vert[3];
@@ -41,7 +54,7 @@ struct fp
 };
 
 
-void save_to_file(std::span<char> data, std::string filename)
+void save_to_file(std::span<const char> data, std::string filename)
 {
   auto f = fopen(filename.c_str(), "w");
   fwrite(data.data(), 1, data.size(), f);
@@ -109,11 +122,34 @@ void do_script()
 
 void script(char* data, int size)
 {
-  std::string_view sv(data, size);
+  using namespace magic_enum::bitwise_operators;
 
-  auto h = plate::async::request(std::string(sv), "GET", "", [] (std::uint32_t handle, plate::data_store&& d)
+  std::string s(data, size);
+
+  log_debug(FMT_COMPILE("scipt: {}"), s);
+
+  auto h = plate::async::request(s, "GET", "", [s] (std::uint32_t handle, plate::data_store&& d)
   {
-    save_bytes_to_file(d.span(), "/i.pdb");
+    if (is_cif(d.span()))
+    {
+      animol::cif2pdb converter(d.span(), animol::cif2pdb::options::ca_atoms | animol::cif2pdb::options::sheet | animol::cif2pdb::options::helix);
+
+      auto r = converter.convert();
+
+      if (r)
+      {
+        //log_debug(FMT_COMPILE("script converted cif to: {}"), *r);
+        save_to_file(std::span<const char>(r->data(), r->size()), "/i.pdb");
+      }
+      else
+      {
+        log_debug("script failed to convert cif");
+        emscripten_worker_respond(nullptr, 0);
+        return;
+      }
+    }
+    else
+      save_bytes_to_file(d.span(), "/i.pdb");
 
     do_script();
 
@@ -158,6 +194,8 @@ void do_decode(int options)
 
 void decode_url(char* data, int size, int options)
 {
+  using namespace magic_enum::bitwise_operators;
+
   if (size < 4)
   {
     log_debug(FMT_COMPILE("decode_url: size too small: {}"), size);
@@ -179,9 +217,28 @@ void decode_url(char* data, int size, int options)
 
   save_to_file(script, "i.script");
 
-  auto h = plate::async::request(url, "GET", "", [options] (std::uint32_t handle, plate::data_store&& d)
+  auto h = plate::async::request(url, "GET", "", [url, options] (std::uint32_t handle, plate::data_store&& d)
   {
-    save_bytes_to_file(d.span(), "/i.pdb");
+    if (is_cif(d.span()))
+    {
+      animol::cif2pdb converter(d.span(), animol::cif2pdb::options::ca_atoms | animol::cif2pdb::options::sheet | animol::cif2pdb::options::helix);
+
+      auto r = converter.convert();
+
+      if (r)
+      {
+        //log_debug(FMT_COMPILE("decode_url converted cif to: {}"), *r);
+        save_to_file(std::span<const char>(r->data(), r->size()), "/i.pdb");
+      }
+      else
+      {
+        log_debug("decode_url failed to convert cif");
+        emscripten_worker_respond(nullptr, 0);
+        return;
+      }
+    }
+    else
+      save_bytes_to_file(d.span(), "/i.pdb");
 
     do_decode(options);
 
@@ -282,11 +339,31 @@ void visualise_atoms(char* data, int size)
 
 void visualise_atoms_url(char* data, int size)
 {
+  using namespace magic_enum::bitwise_operators;
+
   std::string url(data, size);
 
-  auto h = plate::async::request(url, "GET", "", [] (std::uint32_t handle, plate::data_store&& d)
+  auto h = plate::async::request(url, "GET", "", [url] (std::uint32_t handle, plate::data_store&& d)
   {
-    visualise_atoms(reinterpret_cast<char*>(d.data()), d.size());
+    if (is_cif(d.span()))
+    {
+      animol::cif2pdb converter(d.span(), animol::cif2pdb::options::ca_atoms | animol::cif2pdb::options::non_ca_atoms);
+
+      auto r = converter.convert();
+
+      if (r)
+      {
+        //log_debug(FMT_COMPILE("visualise_atoms_url converted cif to: {}"), *r);
+        visualise_atoms(r->data(), r->size());
+      }
+      else
+      {
+        log_debug("visualise_atoms_url failed to convert cif");
+        emscripten_worker_respond(nullptr, 0);
+      }
+    }
+    else
+      visualise_atoms(reinterpret_cast<char*>(d.data()), d.size());
 
   }, [] (std::uint32_t handle, int error_code, std::string error_msg)
   {
