@@ -26,6 +26,8 @@
 #include "widget_menu_projection_button.hpp"
 #include "widget_menu_layer.hpp"
 
+#include "../worker/dcd2pdb.hpp"
+
 // c++23 std::to_underlying funtion
 // should be in #include <utility>
 namespace std {
@@ -565,6 +567,79 @@ public:
   }
 
 
+  void start_local_dcd(std::string& psf_url, std::string& dcd_url) noexcept
+  {
+    clear();
+
+    is_remote_       = false;
+    description_     = "";
+    url_             = "";
+    item_            = "dcd";
+    master_frame_id_ = 0;
+    current_entry_   = 0;
+    current_time_    = 0;
+    total_frames_    = 0;
+    per_frame_files_.clear();
+
+    // first - parse the dcd header to extract the basic info needed: "number_frames, number_atoms, start_offset"
+
+    static const char* headers[] = {"Range", "bytes=0-16383", NULL}; // is 16k enough? have only seen these to be very, very small < 1k
+
+    plate::async::fetch_get(dcd_url, headers, [this, wself{weak_from_this()}, psf_url, dcd_url] (std::size_t counter, plate::data_store&& d, std::uint16_t status)
+    {
+      if (auto p = wself.lock())
+      {
+        emscripten_webgl_make_context_current(this->ui_->ctx_);
+
+        auto info = dcd2pdb::get_dcd_data_info(d.span());
+
+        if (!info)
+        {
+          log_debug(FMT_COMPILE("failed to extract dcd header, size: {} status: {}"), d.size(), status);
+          set_error("failed to extract dcd header");
+          return;
+        }
+
+        json_handler_struct<dcd2pdb::interface> msg;
+        msg.data.psf_url = psf_url;
+        msg.data.dcd_url = dcd_url;
+
+        msg.data.number_atoms    = info->number_atoms;
+        msg.data.dcd_data_offset = info->start_offset;
+
+        for (int i = 0; i < info->number_frames; ++i)
+        {
+          msg.data.frame = i;
+
+          auto url = msg.to_json(); // not really a url..
+
+          per_frame_files_.push_back(url);
+        }
+
+        total_frames_ = info->number_frames;
+
+        auto l = ui_event_destination::make_ui<widget_layer_cartoon<widget_main>>(ui_, coords_, widget_object_, this);
+
+        layers_.push_back(l);
+
+        log_debug(FMT_COMPILE("starting local dcd frames: {}"), total_frames_);
+
+        set_title();
+
+        if (auto w = widget_control_.lock())
+          w->update_status();
+      }
+    }, [this, wself{weak_from_this()}] (std::size_t error_code, int error_msg)
+    {
+      if (auto p = wself.lock())
+      {
+        log_debug(FMT_COMPILE("failed to download dcd header, error_code: {} msg: {}"), error_code, error_msg);
+        set_error("failed to download dcd header");
+      }
+    });
+  }
+
+
   void start_local(const std::string& dir_name, std::vector<std::string>& files) noexcept
   {
     clear();
@@ -967,8 +1042,31 @@ private:
     url_         = "";
 
     if (!is_remote_)
+    {
       for (auto& f : per_frame_files_)
+      {
+        if (f.size() >= 1) // is this a dcd json url?
+        {
+          if (f[0] == '{')
+          {
+            auto msg = json_parse_struct<dcd2pdb::interface>(f);
+
+            if (msg.ok)
+            {
+              plate::ui_event::clear_file_object(msg.data.psf_url);
+              plate::ui_event::clear_file_object(msg.data.dcd_url);
+            }
+            else
+            {
+              log_debug(FMT_COMPILE("Unable to parse dcd url msg: {}"), f);
+            }
+
+            break; // as all the per_frame_files reference the same two objects/urls
+          }
+        }
         plate::ui_event::clear_file_object(f);
+      }
+    }
 
     per_frame_files_.clear();
 
@@ -1019,10 +1117,8 @@ private:
     }
     else
     {
-      log_debug(FMT_COMPILE("before {}"), "a");
       widget_title_ = ui_event_destination::make_ui<widget_text>(ui_, c, Prop::Display, shared_from_this(), title,
                                                         gpu::align::CENTER, ui_->txt_color_, gpu::rotation{0.0f,0.0f,0.0f}, 0.8f);
-      log_debug(FMT_COMPILE("after {}"), "b");
 
       auto fade_in = plate::ui_event_destination::make_anim<plate::anim_alpha>(ui_, widget_title_, plate::ui_anim::Dir::Forward, 0.4f);
     }
@@ -1051,6 +1147,7 @@ private:
   float frame_time_{1.0/30.0}; // 30 fps
 
   bool is_remote_{true};
+
   std::string description_{}; // description of animation
 
   std::string item_;      // item to load (either a protein code if remote, or a local directory name)

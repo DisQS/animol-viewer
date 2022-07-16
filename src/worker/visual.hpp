@@ -39,7 +39,7 @@ public:
   static_assert(sizeof(atom) == 12, "atom struct expands to a bad size");
 
 
-  visualise(std::span<char> pdb_data) noexcept :
+  visualise(std::span<const char> pdb_data) noexcept :
     data_(pdb_data)
   {
   }

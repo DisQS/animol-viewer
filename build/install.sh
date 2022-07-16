@@ -24,11 +24,11 @@ pushd temp-web > /dev/null
 brotli -f index.html -o index.html.br &
 
 cd version/${i}
-brotli -f pdbmovie.js -o pdbmovie.js.br &
-brotli -f pdbmovie.wasm -o pdbmovie.wasm.br &
+brotli -4f pdbmovie.js -o pdbmovie.js.br &
+brotli -4f pdbmovie.wasm -o pdbmovie.wasm.br &
 
-brotli -f decoder_worker.js -o decoder_worker.js.br &
-brotli -f decoder_worker.wasm -o decoder_worker.wasm.br &
+brotli -4f decoder_worker.js -o decoder_worker.js.br &
+brotli -4f decoder_worker.wasm -o decoder_worker.wasm.br &
 
 wait
 

@@ -21,7 +21,7 @@ class string_data
 public:
 
 
-  string_data(std::span<char> data) noexcept :
+  string_data(std::span<const char> data) noexcept :
     data_(data)
   {
     to_start();
@@ -50,6 +50,11 @@ public:
       ++pos_;
 
     return sv;
+  }
+
+  bool end() const noexcept
+  {
+    return pos_ >= end_;
   }
 
 
@@ -111,11 +116,11 @@ public:
 private:
 
 
-  std::span<char> data_;
+  std::span<const char> data_;
 
-  char* pos_;
-  char* prev_pos_;
-  char* end_;
+  const char* pos_;
+  const char* prev_pos_;
+  const char* end_;
 };
 
 } // namespace animol

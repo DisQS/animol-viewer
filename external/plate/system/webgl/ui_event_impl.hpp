@@ -303,7 +303,7 @@ EM_JS(void, js_open_file_show_picker, (std::uint32_t cb),
     {
       description: 'proteins',
       accept: {
-        'application/protein': ['.pdb']
+        'application/protein': ['.pdb', '.cif']
       }
     },
     ],

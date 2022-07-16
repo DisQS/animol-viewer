@@ -5,7 +5,9 @@
 #include <emscripten/fetch.h>
 
 #include "visual.hpp"
+
 #include "cif2pdb.hpp"
+#include "dcd2pdb.hpp"
 
 
 extern "C" {
@@ -51,6 +53,128 @@ struct fp
   short vert[3];
   short norm[3];
   unsigned char col[4];
+};
+
+
+void save_to_file(std::span<const char> data, std::string filename);
+void do_script();
+void visualise_atoms(const char* data, int size);
+
+
+// helper for handling a dcd frame extraction
+struct dcd_process : public std::enable_shared_from_this<dcd_process>
+{
+  std::function< void ()> cb_;
+
+  int frame_;
+
+  std::string psf_url_;
+  std::string dcd_url_;
+
+  int           number_atoms_;
+  std::uint64_t dcd_data_offset_;
+
+  animol::dcd2pdb converter_;
+
+  bool keepCAs_;
+  bool keepNonCAs_;
+
+  std::string range_query_;
+
+  std::uint64_t get_frame_offset(int frame_id) const noexcept
+  {
+    return dcd_data_offset_ + (frame_id * get_frame_size());
+  }
+
+  std::uint64_t get_frame_size() const noexcept
+  {
+    // Each coordinate (x, y and z) has:
+    // 4 bytes for start_length
+    // 4 bytes for end_length
+    // 4 bytes per atom for the float cordinate
+
+    return (4 + 4 + (4 * number_atoms_)) * 3;
+  }
+
+
+  bool start(char* data, int size)
+  {
+    std::string_view s(data, size);
+
+    auto msg = plate::json_parse_struct<animol::dcd2pdb::interface>(s);
+
+    if (!msg.ok)
+    { 
+      log_debug(FMT_COMPILE("process dcd: unable to parse: {}"), size);
+      emscripten_worker_respond(nullptr, 0);
+      return false;
+    }
+
+    frame_           = msg.data.frame;
+    psf_url_         = msg.data.psf_url;
+    dcd_url_         = msg.data.dcd_url;
+    number_atoms_    = msg.data.number_atoms;
+    dcd_data_offset_ = msg.data.dcd_data_offset;
+
+    // load in psf file
+
+    plate::async::request(psf_url_, "GET", "", [this, self(shared_from_this())] (std::uint32_t handle, plate::data_store&& d)
+    {
+      if (!converter_.generate_template(d.span(), keepCAs_, keepNonCAs_))
+      {
+        log_debug("generate_template failed");
+        emscripten_worker_respond(nullptr, 0);
+        return;
+      }
+
+      if (number_atoms_ != converter_.get_number_of_atoms())
+      {
+        log_debug(FMT_COMPILE("number of atoms mismatch, dcd has: {} psf has: {}"), number_atoms_, converter_.get_number_of_atoms());
+        emscripten_worker_respond(nullptr, 0);
+        return;
+      }
+
+      // load in the data part of the dcd file for this frame
+
+      range_query_ = fmt::format(FMT_COMPILE("bytes={}-{}"), get_frame_offset(frame_), get_frame_offset(frame_) + get_frame_size() - 1);
+
+      const char* headers[] = {"Range", range_query_.data(), NULL};
+
+      plate::async::fetch_get(dcd_url_, headers, [this, self] (std::size_t counter, plate::data_store&& d, std::uint16_t status)
+      {
+        if (!converter_.populate_template(d.span()))
+        {
+          log_debug("Unable to populate template");
+          emscripten_worker_respond(nullptr, 0);
+          return;
+        }
+
+        auto& r = converter_.get_pdb_data();
+
+        if (cb_)
+        {
+          save_to_file(std::span<const char>(r.data(), r.size()), "/i.pdb");
+          cb_();
+        }
+        else
+          visualise_atoms(r.data(), r.size());
+          
+      }, [] (std::size_t error_code, int error_msg)
+      {
+        log_debug(FMT_COMPILE("failed to download frame dcd range, error_code: {} msg: {}"), error_code, error_msg);
+        emscripten_worker_respond(nullptr, 0);
+      });
+
+    }, [] (std::uint32_t handle, int error_code, std::string error_msg)
+    {
+      log_debug(FMT_COMPILE("failed to download psf_file, error_code: {} msg: {}"), error_code, error_msg);
+
+      emscripten_worker_respond(nullptr, 0);
+    },
+    {});
+
+    return true;
+  }
 };
 
 
@@ -127,6 +251,18 @@ void script(char* data, int size)
   std::string s(data, size);
 
   log_debug(FMT_COMPILE("scipt: {}"), s);
+
+  if (s.starts_with("{")) // this is a combined dcd url
+  {
+    auto process = std::make_shared<dcd_process>();
+
+    process->cb_         = [] { do_script(); };
+    process->keepCAs_    = true;
+    process->keepNonCAs_ = false;
+
+    process->start(data, size);
+    return;
+  }
 
   auto h = plate::async::request(s, "GET", "", [s] (std::uint32_t handle, plate::data_store&& d)
   {
@@ -216,6 +352,18 @@ void decode_url(char* data, int size, int options)
   std::string url(data + 4 + script_sz, size - (script_sz + 4));
 
   save_to_file(script, "i.script");
+
+  if (url.starts_with("{")) // this is a combined dcd url
+  {
+    auto process = std::make_shared<dcd_process>();
+  
+    process->cb_         = [options] { do_decode(options); };
+    process->keepCAs_    = true;
+    process->keepNonCAs_ = false;
+  
+    process->start(data + 4 + script_sz, size - (script_sz + 4));
+    return;
+  }
 
   auto h = plate::async::request(url, "GET", "", [url, options] (std::uint32_t handle, plate::data_store&& d)
   {
@@ -324,7 +472,7 @@ void decode_contents_no_color(char* data, int size)
 
 // data is pdb file contents
 
-void visualise_atoms(char* data, int size)
+void visualise_atoms(const char* data, int size)
 {
   using namespace animol;
 
@@ -342,6 +490,17 @@ void visualise_atoms_url(char* data, int size)
   using namespace magic_enum::bitwise_operators;
 
   std::string url(data, size);
+
+  if (url.starts_with("{")) // this is a combined dcd url
+  {
+    auto process = std::make_shared<dcd_process>();
+      
+    process->keepCAs_    = true;
+    process->keepNonCAs_ = true;
+      
+    process->start(data, size);
+    return;
+  }
 
   auto h = plate::async::request(url, "GET", "", [url] (std::uint32_t handle, plate::data_store&& d)
   {

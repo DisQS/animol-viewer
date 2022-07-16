@@ -150,6 +150,7 @@ public:
     description_ = "";
 
     is_remote_ = true;
+    is_dcd_    = false;
 
     local_files_.clear();
 
@@ -165,6 +166,36 @@ public:
     }
 
     animate();
+  }
+
+
+  void open_local_dcd(std::string url_objects)
+  {
+    emscripten_webgl_make_context_current(s_->ctx_);
+
+    code_ = "";
+    description_ = "";
+
+    is_remote_ = true;
+    is_dcd_    = true;
+
+    local_files_.clear();
+
+    int start;
+    int end = 0;
+
+    while ((start = url_objects.find_first_not_of('\n', end)) != std::string::npos)
+    {
+      end = url_objects.find('\n', start);
+
+      if (end - start > 0)
+        local_files_.push_back(url_objects.substr(start, end - start));
+    }
+
+    if (local_files_.size() != 2)
+      log_debug(FMT_COMPILE("Bad number of dcd files, wanted 2, got: {}"), local_files_.size());
+    else
+      animate();
   }
 
 
@@ -256,7 +287,13 @@ private:
 
     if (is_remote_)
     {
-      w_->start_local("", local_files_);
+      if (is_dcd_)
+      {
+        w_->start_local_dcd(local_files_[0], local_files_[1]);
+      }
+      else
+        w_->start_local("", local_files_);
+
       local_files_.clear();
 
       return;
@@ -286,6 +323,7 @@ private:
   std::string description_;
 
   bool is_remote_{false};
+  bool is_dcd_{false};
 
   std::shared_ptr<animol::widget_main> w_{};
 
@@ -307,5 +345,6 @@ EMSCRIPTEN_BINDINGS(movie)
     .function("get_json",                   &movie::get_json)
     .function("get_style_json",             &movie::get_style_json)
     .function("open_local",                 &movie::open_local)
+    .function("open_local_dcd",             &movie::open_local_dcd)
     ;
 }

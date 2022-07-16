@@ -63,8 +63,7 @@ public:
     {
       auto c = reinterpret_cast<std::size_t>(fetch->userData);
 
-      log_debug(FMT_COMPILE("Finished job: {} downloading {} bytes from URL {}"),
-                                                                c, fetch->numBytes, fetch->url);
+      //log_debug(FMT_COMPILE("Finished job: {} downloading {} bytes from URL {}"), c, fetch->numBytes, fetch->url);
 
       std::function<void (std::size_t, data_store&&, std::uint16_t)> on_load;
 
@@ -153,8 +152,7 @@ public:
     {
       auto c = reinterpret_cast<std::size_t>(fetch->userData);
 
-      log_debug(FMT_COMPILE("Finished downloading {} bytes from URL {} counter: {}"),
-                                                                        fetch->numBytes, fetch->url, c);
+      //log_debug(FMT_COMPILE("Finished downloading {} bytes from URL {} counter: {}"), fetch->numBytes, fetch->url, c);
 
       std::function<void (std::size_t, data_store&&, std::uint16_t)> on_load;
 
