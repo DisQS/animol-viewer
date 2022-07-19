@@ -161,9 +161,9 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
   ctxAttrs.majorVersion = 2;
   ctxAttrs.minorVersion = 0;
 
-//  s->ctx_ = emscripten_webgl_create_context(canvas_name.c_str(), &ctxAttrs);
-//
-//  if (s->ctx_ <= 0) // unable to create w webgl2 context so try a webgl1 context
+  s->ctx_ = emscripten_webgl_create_context(canvas_name.c_str(), &ctxAttrs);
+
+  if (s->ctx_ <= 0) // unable to create w webgl2 context so try a webgl1 context
   {
     ctxAttrs.majorVersion = 1;
     s->ctx_ = emscripten_webgl_create_context(canvas_name.c_str(), &ctxAttrs);
@@ -206,7 +206,7 @@ std::shared_ptr<plate::state> arch_create(std::string canvas_name, std::string f
   s->shader_text_msdf_              = new shader_text_msdf(true, s->version_);
   s->shader_object_                 = new shader_object(true);
   s->shader_object_instanced_       = new shader_object_instanced(true);
-  s->shader_spheres_                = new shader_spheres();
+  s->shader_spheres_                = new shader_spheres(s->version_);
 //  s->shader_example_geom_           = new shader_example_geom(true);
 //  s->shader_circle_                 = new shader_circle(true, s->version_);
   s->shader_rounded_box_            = new shader_rounded_box(true, s->version_);

@@ -10,6 +10,9 @@
 
 #include "gl.vert.h"
 #include "gl.frag.h"
+#include "gl2.vert.h"
+#include "gl2.frag.h"
+
 
 namespace plate {
 
@@ -45,11 +48,16 @@ public:
   };
 
 
-  shader_spheres() noexcept
-  { 
-    std::tie(vertex_shader_, fragment_shader_) = plate::compile(
+  shader_spheres(int version) noexcept
+  {
+    if (version == 1)
+      std::tie(vertex_shader_, fragment_shader_) = plate::compile(
                       {reinterpret_cast<const char*>(spheres_gl_vert), spheres_gl_vert_len},
                       {reinterpret_cast<const char*>(spheres_gl_frag), spheres_gl_frag_len});
+    else // version == 2
+      std::tie(vertex_shader_, fragment_shader_) = plate::compile(
+                      {reinterpret_cast<const char*>(spheres_gl2_vert), spheres_gl2_vert_len},
+                      {reinterpret_cast<const char*>(spheres_gl2_frag), spheres_gl2_frag_len});
   }
 
 
